@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { writeText, writeImage } from '@tauri-apps/plugin-clipboard-manager';
-import { save } from '@tauri-apps/api/dialog';
-import { open } from '@tauri-apps/plugin-opener';
+import { save } from '@tauri-apps/plugin-dialog';
+import { openPath } from '@tauri-apps/plugin-opener';
 import { CheckIcon, DocumentIcon, PhotoIcon, VideoCameraIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 
 interface AttachmentHandlerProps {
@@ -101,7 +101,7 @@ export const AttachmentHandler: React.FC<AttachmentHandlerProps> = ({ onClose, a
         if (result) {
           addToast(`File saved successfully!`, 'success');
           // Open the file with the default application
-          await open(filePath);
+          await openPath(filePath);
         }
       }
     } catch (error) {

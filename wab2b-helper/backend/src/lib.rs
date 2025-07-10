@@ -1,5 +1,7 @@
-use tauri::{Manager, AppHandle, WindowEvent};
-use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri::Manager;
+// ClipboardExt is no longer needed; removed.
+use tauri_plugin_deep_link::DeepLinkExt;
+use tauri::Emitter;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -66,36 +68,27 @@ fn parse_url_scheme(url: &str) -> Result<String, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
-            // Listen for deep link
+            // Deep link handler using official plugin
             #[cfg(desktop)]
-            app.listen_global("tauri://protocol-request", move |event| {
-                let url = match event.payload() {
-                    Some(payload) => {
-                        // Format: {"path":"wab2b-helper:https://example.com/path"}
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(payload) {
-                            if let Some(path) = json.get("path").and_then(|p| p.as_str()) {
-                                Some(path.to_string())
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
+            {
+                let app_handle = app.handle();
+                // Register the handler using the owned `AppHandle` so no borrowed
+                // reference escapes this setup closure.
+                let handler_handle = app_handle.clone();
+                app_handle.deep_link().on_open_url(move |event| {
+                    if let Some(first_url) = event.urls().first() {
+                        // Remove the custom scheme prefix if present
+                        let stripped = first_url.as_str().trim_start_matches("wab2b-helper:").to_string();
+                        if let Some(window) = handler_handle.get_webview_window("main") {
+                            let _ = window.emit("attachment-url", stripped);
                         }
-                    },
-                    None => None
-                };
-
-                if let Some(url_str) = url {
-                    // Extract the actual attachment URL
-                    if let Ok(attachment_url) = parse_url_scheme(&url_str) {
-                        // Send the URL to the frontend
-                        let main_window = app.get_window("main").unwrap();
-                        main_window.emit("attachment-url", attachment_url).unwrap();
                     }
-                }
-            });
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

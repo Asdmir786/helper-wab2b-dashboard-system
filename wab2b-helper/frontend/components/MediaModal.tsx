@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon, CheckIcon, DocumentIcon, PhotoIcon, VideoCameraIcon } from '@heroicons/react/24/outline';
-import { writeText, writeImage } from '@tauri-apps/plugin-clipboard';
+import { writeText, writeImage } from '@tauri-apps/plugin-clipboard-manager';
 
 export interface MediaItem {
   id: string;
@@ -82,7 +82,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   };
 
   // Simple notification function
-  const showNotification = (message: string, isError = false) => {
+  const showNotification = (message: string, _isError = false) => {
     // In a real app, you might use a toast component or native OS notifications
     console.log(message);
     // You can implement a more sophisticated notification system
