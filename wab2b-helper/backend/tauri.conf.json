@@ -22,7 +22,13 @@
     ],
     "security": {
       "csp": null
-    }
+    },
+    "protocolHandlers": [
+      {
+        "protocol": "wab2b-helper",
+        "arguments": ["--attachment-url"]
+      }
+    ]
   },
   "bundle": {
     "active": true,

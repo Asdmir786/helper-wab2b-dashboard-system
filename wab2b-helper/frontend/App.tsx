@@ -3,6 +3,7 @@ import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { MediaModal, MediaItem } from "./components/MediaModal";
 import { ToastContainer, useToast } from "./components/ToastContainer";
+import { AttachmentHandler } from "./components/AttachmentHandler";
 
 // Sample media items for demo
 const sampleMediaItems: MediaItem[] = [
@@ -30,11 +31,17 @@ const sampleMediaItems: MediaItem[] = [
 
 function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAttachmentHandlerOpen, setIsAttachmentHandlerOpen] = useState(true);
   const { toasts, addToast, removeToast } = useToast();
   
   // Function to open the modal with media items
   const openMediaModal = () => {
     setIsModalOpen(true);
+  };
+
+  // Function to close the attachment handler
+  const closeAttachmentHandler = () => {
+    setIsAttachmentHandlerOpen(false);
   };
 
   return (
@@ -76,6 +83,13 @@ function App() {
                 Show Error Toast
               </button>
             </div>
+            
+            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+              <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-300">URL Scheme Usage</h3>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                Use <code className="bg-blue-100 dark:bg-blue-800 px-1 py-0.5 rounded">wab2b-helper:https://example.com/file.jpg</code> to automatically copy any attachment to clipboard.
+              </p>
+            </div>
           </div>
         </main>
         
@@ -86,6 +100,14 @@ function App() {
           mediaItems={sampleMediaItems}
           title="MS Contact Renewal Attachments"
         />
+        
+        {/* Attachment Handler for URL Scheme */}
+        {isAttachmentHandlerOpen && (
+          <AttachmentHandler 
+            onClose={closeAttachmentHandler}
+            addToast={addToast}
+          />
+        )}
         
         {/* Toast Container */}
         <ToastContainer toasts={toasts} removeToast={removeToast} />
