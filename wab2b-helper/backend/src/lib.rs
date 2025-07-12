@@ -2,6 +2,7 @@ use tauri::Manager;
 // ClipboardExt is no longer needed; removed.
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri::Emitter;
+use tauri_plugin_updater::UpdaterExt;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -64,6 +65,53 @@ fn parse_url_scheme(url: &str) -> Result<String, String> {
     }
 }
 
+#[tauri::command]
+async fn check_update(app_handle: tauri::AppHandle) -> Result<bool, String> {
+    match app_handle.updater().check().await {
+        Ok(update) => {
+            if update.is_update_available() {
+                // Send event to frontend that an update is available
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.emit("update-available", update.latest_version());
+                }
+                Ok(true)
+            } else {
+                // No update available
+                Ok(false)
+            }
+        }
+        Err(e) => Err(format!("Error checking for updates: {}", e)),
+    }
+}
+
+#[tauri::command]
+async fn download_and_install_update(app_handle: tauri::AppHandle) -> Result<(), String> {
+    match app_handle.updater().check().await {
+        Ok(update) => {
+            if update.is_update_available() {
+                let app_handle_clone = app_handle.clone();
+                
+                // Set up progress handler
+                let on_download_progress = move |progress, total| {
+                    let percentage = (progress as f64 / total as f64 * 100.0) as u32;
+                    if let Some(window) = app_handle_clone.get_webview_window("main") {
+                        let _ = window.emit("update-download-progress", percentage);
+                    }
+                };
+                
+                // Download the update
+                match update.download_and_install(Some(Box::new(on_download_progress))).await {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(format!("Failed to install update: {}", e)),
+                }
+            } else {
+                Err("No update is available".into())
+            }
+        }
+        Err(e) => Err(format!("Error checking for updates: {}", e)),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -71,6 +119,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_updater::init())
         .setup(|app| {
             // Deep link handler using official plugin
             #[cfg(desktop)]
@@ -88,6 +137,26 @@ pub fn run() {
                         }
                     }
                 });
+                
+                // Schedule update check when app starts
+                let update_handle = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    // Wait a few seconds to let the app fully initialize
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    
+                    match update_handle.updater().check().await {
+                        Ok(update) => {
+                            if update.is_update_available() {
+                                if let Some(window) = update_handle.get_webview_window("main") {
+                                    let _ = window.emit("update-available", update.latest_version());
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Error checking for updates: {}", e);
+                        }
+                    }
+                });
             }
             Ok(())
         })
@@ -95,7 +164,9 @@ pub fn run() {
             greet, 
             copy_to_clipboard, 
             download_file, 
-            parse_url_scheme
+            parse_url_scheme,
+            check_update,
+            download_and_install_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
