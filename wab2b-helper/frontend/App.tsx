@@ -1,8 +1,40 @@
+import { useState } from "react";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { AttachmentHandler } from "./components/AttachmentHandler";
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
+import { Toast } from "./components/Toast";
+
+// Simple container component for toasts
+const ToastContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <div className="fixed bottom-0 right-0 p-4 z-50 space-y-4">
+      {children}
+    </div>
+  );
+};
 
 function App() {
+  const [toasts, setToasts] = useState<Array<{
+    id: number,
+    message: string,
+    type: 'success' | 'error',
+    duration: number
+  }>>([]);
+
+  const addToast = (message: string, type: 'success' | 'error', duration = 3000) => {
+    const id = Date.now();
+    setToasts(prevToasts => [...prevToasts, { id, message, type, duration }]);
+    setTimeout(() => {
+      setToasts(prevToasts => prevToasts.filter(toast => toast.id !== id));
+    }, duration);
+  };
+
+  const handleAttachmentHandlerClose = () => {
+    // We'll keep this even though showAttachmentHandler is removed
+    // This function is passed to AttachmentHandler and used when closing
+  };
+
   return (
     <ThemeProvider>
       <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--body-bg)] transition-colors duration-500">
@@ -24,9 +56,26 @@ function App() {
           <h2 className="text-lg font-semibold text-[var(--panel-text)] mb-4">
             Waiting for an attachment…
           </h2>
-
         </div>
+
+        {/* AttachmentHandler */}
+        <AttachmentHandler 
+          onClose={handleAttachmentHandlerClose}
+          addToast={addToast}
+        />
       </div>
+      
+      {/* Toast container */}
+      <ToastContainer>
+        {toasts.map(toast => (
+          <Toast 
+            key={toast.id} 
+            message={toast.message} 
+            type={toast.type} 
+            onClose={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} 
+          />
+        ))}
+      </ToastContainer>
     </ThemeProvider>
   );
 }

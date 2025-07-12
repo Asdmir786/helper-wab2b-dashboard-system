@@ -1,0 +1,14 @@
+[build]
+# Place artifacts in repo-root `target/`
+target-dir = "target"
+# Use sccache for compiled object caching (install via `cargo install sccache`).
+rustc-wrapper = "sccache"
+
+# Faster linker on Windows (requires LLVM lld-link in PATH)
+[target.x86_64-pc-windows-msvc]
+linker = "C:\\Program Files\\LLVM\\bin\\lld-link.exe"
+
+[profile.dev]
+opt-level = 0          # fastest compile time
+codegen-units = 256    # maximise parallelism
+incremental = true
