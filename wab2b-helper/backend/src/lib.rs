@@ -67,49 +67,51 @@ fn parse_url_scheme(url: &str) -> Result<String, String> {
 
 #[tauri::command]
 async fn check_update(app_handle: tauri::AppHandle) -> Result<bool, String> {
-    match app_handle.updater().check().await {
-        Ok(update) => {
-            if update.is_update_available() {
-                // Send event to frontend that an update is available
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.emit("update-available", update.latest_version());
-                }
-                Ok(true)
-            } else {
-                // No update available
-                Ok(false)
+    // Convert possible updater construction error to String
+    let updater = app_handle
+        .updater()
+        .map_err(|e| e.to_string())?;
+
+    match updater.check().await.map_err(|e| e.to_string())? {
+        Some(update) => {
+            // Send event to frontend that an update is available
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.emit("update-available", update.version.clone());
             }
+            Ok(true)
         }
-        Err(e) => Err(format!("Error checking for updates: {}", e)),
+        None => Ok(false), // no update
     }
 }
 
 #[tauri::command]
 async fn download_and_install_update(app_handle: tauri::AppHandle) -> Result<(), String> {
-    match app_handle.updater().check().await {
-        Ok(update) => {
-            if update.is_update_available() {
-                let app_handle_clone = app_handle.clone();
-                
-                // Set up progress handler
-                let on_download_progress = move |progress, total| {
-                    let percentage = (progress as f64 / total as f64 * 100.0) as u32;
-                    if let Some(window) = app_handle_clone.get_webview_window("main") {
-                        let _ = window.emit("update-download-progress", percentage);
-                    }
-                };
-                
-                // Download the update
-                match update.download_and_install(Some(Box::new(on_download_progress))).await {
-                    Ok(_) => Ok(()),
-                    Err(e) => Err(format!("Failed to install update: {}", e)),
+    let updater = app_handle
+        .updater()
+        .map_err(|e| e.to_string())?;
+
+    let maybe_update = updater.check().await.map_err(|e| e.to_string())?;
+
+    let Some(update) = maybe_update else {
+        return Err("No update is available".into());
+    };
+
+    // Clone handle for move into closures
+    let window_handle = app_handle.get_webview_window("main");
+
+    // Download + install with progress callback
+    update
+        .download_and_install(
+            move |chunk_len, content_len| {
+                if let (Some(total), Some(window)) = (content_len, window_handle.as_ref()) {
+                    let percentage = (chunk_len as f64 / total as f64 * 100.0) as u32;
+                    let _ = window.emit("update-download-progress", percentage);
                 }
-            } else {
-                Err("No update is available".into())
-            }
-        }
-        Err(e) => Err(format!("Error checking for updates: {}", e)),
-    }
+            },
+            || {}, // finished callback – frontend already receives "update-install-finished" elsewhere if needed
+        )
+        .await
+        .map_err(|e| format!("Failed to install update: {}", e))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -119,7 +121,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_updater::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // Deep link handler using official plugin
             #[cfg(desktop)]
@@ -144,17 +146,18 @@ pub fn run() {
                     // Wait a few seconds to let the app fully initialize
                     std::thread::sleep(std::time::Duration::from_secs(3));
                     
-                    match update_handle.updater().check().await {
-                        Ok(update) => {
-                            if update.is_update_available() {
+                    if let Ok(updater) = update_handle.updater() {
+                        match updater.check().await {
+                            Ok(Some(update)) => {
                                 if let Some(window) = update_handle.get_webview_window("main") {
-                                    let _ = window.emit("update-available", update.latest_version());
+                                    let _ = window.emit("update-available", update.version.clone());
                                 }
                             }
+                            Ok(None) => { /* no update */ }
+                            Err(e) => eprintln!("Error checking for updates: {}", e),
                         }
-                        Err(e) => {
-                            eprintln!("Error checking for updates: {}", e);
-                        }
+                    } else {
+                        eprintln!("Failed to build updater instance");
                     }
                 });
             }

@@ -1,0 +1,41 @@
+name: Build & Release
+
+# Runs whenever you push a tag that starts with "v"  (v1.0.2, v2.3.0-beta, …)
+on:
+  push:
+    tags: [ "v*" ]
+
+jobs:
+  build:
+    runs-on: windows-latest      # change / add ubuntu-latest or macos-latest if desired
+
+    # Signing secrets you already created in the repo settings
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+    steps:
+      # 1. Get the code
+      - uses: actions/checkout@v4
+
+      # 2. Install the latest LTS Node + npm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      # 3. Install JS dependencies
+      - run: npm ci
+
+      # 4. Build the signed Tauri app and create the GitHub Release
+      #    The Tauri Action automatically:
+      #      • installs Rust toolchain
+      #      • runs `npm run tauri:build` (so you don’t need a separate step)
+      #      • creates / uploads installers + latest.json + signatures
+      - name: Build & publish
+        uses: tauri-apps/tauri-action@v0
+        with:
+          tagName: ${{ github.ref_name }}            # v1.0.2
+          releaseName: "WAB2B Helper ${{ github.ref_name }}"
+          releaseDraft: false                        # publish immediately
+          includeUpdaterJson: true                   # uploads latest.json
