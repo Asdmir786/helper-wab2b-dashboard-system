@@ -37,10 +37,52 @@ jobs:
           releaseName:   "WAB2B Helper ${{ github.ref_name }}"
           includeUpdaterJson: true
           releaseDraft:  false
+          tauriScript: "npm run tauri:build"   # run our custom build script
           # optional changelog text
           releaseBody: |
-            ### Changelog
-            - Automatic updater enabled
-            - Attachment handler improvements
-            - Dark-mode toggle
-            - etc…
+            # WAB2B Helper ${{ github.ref_name }}
+
+            Release date: 12 July 2025  
+            (tag `${{ github.ref_name }}`)
+
+            ---
+
+            ## ✨ Features
+            1. **Deep-Link Attachment Handler**  
+               • Handles `wab2b-helper:<url>` links fired from any browser.  
+               • Detects file type (image / video / document) instantly.  
+               • One-click actions: **Copy**, **Download & Save**, auto-open file.
+
+            2. **Automatic Updater**  
+               • Background check at startup + manual “Refresh” button.  
+               • Secure update pipeline via GitHub Releases + ed25519 signature.  
+               • Download progress bar, toast prompts, single-click install & restart.
+
+            3. **Dark / Light Theme Toggle**  
+               • Smooth transition using Tailwind CSS variables.  
+               • Remembers preference between launches.
+
+            4. **Toast Notification System**  
+               • Reusable React component (success / error).  
+               • Queueing, auto-dismiss, manual close.
+
+            ---
+
+            ## 🛠 Technical Highlights
+            * **Tauri v2.6** backend, **React 19 + Vite** frontend.  
+            * CI/CD: GitHub Actions builds, signs, publishes installers + `latest.json`.  
+            * Windows NSIS + MSI bundles provided; updater artifacts signed.  
+            * Codebase updated to Rust 2024 edition; all deps on latest stable versions.
+
+            ---
+
+            ## 🚀 Getting Started
+            1. Download `wab2b-helper_${{ github.ref_name }}_x64-setup.exe` from the assets below.  
+            2. Install and launch.  
+            3. Test deep-links: open a browser and navigate to  
+               ```
+               wab2b-helper:https://example.com/demo.pdf
+               ```  
+               The attachment panel will appear instantly.
+
+            Enjoy!  If you run into issues, open an issue on GitHub or email support@wab2b.com.

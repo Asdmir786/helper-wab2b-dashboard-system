@@ -1,6 +1,6 @@
 [package]
 name = "wab2b-helper"
-version = "1.0.1"
+version = "1.0.2"
 description = "A Desktop App, which is a helper for dashboard.wab2b.com for copying attachments."
 authors = ["Asdmir786"]
 edition = "2024"
