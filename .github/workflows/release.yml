@@ -7,10 +7,6 @@ jobs:
   tauri:
     runs-on: windows-latest
 
-    # ➊  Tell Cargo (and every cache) to use wab2b-helper/target
-    env:
-      CARGO_TARGET_DIR: wab2b-helper/target                # ← moved out of backend
-
     permissions:
       contents: write
 
@@ -30,26 +26,25 @@ jobs:
           cache: npm
           cache-dependency-path: wab2b-helper/package-lock.json
 
-      # ➌  Rust cache now maps workspace → ../target (same dir as CARGO_TARGET_DIR)
+      # ➌  Cache the Rust build artifacts
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: "wab2b-helper/backend -> ../target"   # :contentReference[oaicite:1]{index=1}
+          workspaces: "wab2b-helper/backend -> target"
 
       - name: install app dependencies
         working-directory: wab2b-helper
         run: npm ci
 
       # ➍  Build, updater-sign, draft release
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v0.5.22
         env:
           GITHUB_TOKEN:                       ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          projectPath: wab2b-helper/backend                   # crate still here
+          projectPath: wab2b-helper
           tagName:      ${{ github.ref_name }}
-          releaseName:  "v${{ github.ref_name }}"
-          releaseDraft: true
+          releaseName:  ${{ github.ref_name }}
+          releaseDraft: false
           releaseBody:  'See the assets to download this version and install.'
           prerelease:   false
-          
