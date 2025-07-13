@@ -31,17 +31,17 @@ jobs:
         run: npm ci
 
       # ➍  Release with Tauri Action
-      - uses: tauri-apps/tauri-action@v0.5.22
+      - uses: tauri-apps/tauri-action@dev
         env:
-          GITHUB_TOKEN:                       ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: wab2b-helper
-          tagName:      ${{ github.ref_name }}
-          releaseName:  ${{ github.ref_name }}
+          tagName: ${{ github.ref_name }}
+          releaseName: ${{ github.ref_name }}
           releaseDraft: false
-          releaseBody:  'See the assets to download this version and install.'
-          prerelease:   false
+          releaseBody: 'See the assets to download this version and install.'
+          prerelease: false
           args: --config backend/tauri.conf.json
           includeUpdaterJson: true
