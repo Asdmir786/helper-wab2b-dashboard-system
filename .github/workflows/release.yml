@@ -6,6 +6,8 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: write
     runs-on: windows-latest
 
     env:
@@ -75,6 +77,10 @@ jobs:
         TAURI_PRIVATE_KEY:                  ${{ secrets.TAURI_PRIVATE_KEY }}
         TAURI_KEY_PASSWORD:                 ${{ secrets.TAURI_KEY_PASSWORD }}
       run: npm run tauri:build
+
+    - name: List target/release files for debugging
+      shell: pwsh
+      run: Get-ChildItem -Path wab2b-helper/target/release -Recurse | ForEach-Object { $_.FullName }
 
     ########################################################
     # 5 ▸ Publish the release & upload binaries
