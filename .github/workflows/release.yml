@@ -26,11 +26,6 @@ jobs:
           cache: npm
           cache-dependency-path: wab2b-helper/package-lock.json
 
-      # ➌  Cache the Rust build artifacts
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: "wab2b-helper/backend -> target"
-
       - name: install app dependencies
         working-directory: wab2b-helper
         run: npm ci
@@ -48,4 +43,4 @@ jobs:
           releaseDraft: false
           releaseBody:  'See the assets to download this version and install.'
           prerelease:   false
-          args: build --config backend/tauri.conf.json
+          args: --config backend/tauri.conf.json
