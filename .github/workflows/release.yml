@@ -35,7 +35,12 @@ jobs:
         working-directory: wab2b-helper
         run: npm ci
 
-      # ➍  Build, updater-sign, draft release
+      # ➍  Build both backend and frontend
+      - name: Build Backend and Frontend
+        working-directory: wab2b-helper
+        run: npm run tauri:build
+
+      # ➎  Release with Tauri Action
       - uses: tauri-apps/tauri-action@v0.5.22
         env:
           GITHUB_TOKEN:                       ${{ secrets.GITHUB_TOKEN }}
