@@ -48,3 +48,4 @@ jobs:
           releaseDraft: false
           releaseBody:  'See the assets to download this version and install.'
           prerelease:   false
+          args: --config backend/tauri.conf.json
