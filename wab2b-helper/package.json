@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "tauri:dev": "tauri dev --config backend/tauri.conf.json",
     "tauri": "tauri",
-    "tauri:build": "tauri build --config backend/tauri.conf.json"
+    "tauri:build": "cross-env TAURI_SIGNING_PRIVATE_KEY=$TAURI_SIGNING_PRIVATE_KEY tauri build --bundles nsis --config backend/tauri.conf.json"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.4",
@@ -32,6 +32,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "cross-env": "^7.0.3",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
   }
