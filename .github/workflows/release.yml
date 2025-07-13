@@ -82,6 +82,27 @@ jobs:
       shell: pwsh
       run: Get-ChildItem -Path wab2b-helper/target/release -Recurse | ForEach-Object { $_.FullName }
 
+    - name: Generate latest.json for updater
+      shell: pwsh
+      run: |
+        $version = "${{ github.ref_name }}"
+        $zipFile = (Get-ChildItem -Path wab2b-helper/target/release/bundle/msi/*.msi.zip | Select-Object -First 1).Name
+        $sigFile = (Get-ChildItem -Path wab2b-helper/target/release/bundle/msi/*.msi.zip.sig | Select-Object -First 1).Name
+        $sigContent = Get-Content "wab2b-helper/target/release/bundle/msi/$sigFile"
+        $pubDate = Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ"
+        $json = @{
+          version = $version
+          notes = "Release notes for $version"
+          pub_date = $pubDate
+          platforms = @{
+            "windows-x86_64" = @{
+              url = "https://github.com/${{ github.repository }}/releases/download/$version/$zipFile"
+              signature = $sigContent
+            }
+          }
+        } | ConvertTo-Json
+        $json | Out-File -FilePath latest.json
+
     ########################################################
     # 5 ▸ Publish the release & upload binaries
     ########################################################
@@ -150,5 +171,6 @@ jobs:
         files: |
           wab2b-helper/target/release/bundle/nsis/*.exe
           wab2b-helper/target/release/bundle/msi/*.msi
-          wab2b-helper/target/release/*.zip
-          wab2b-helper/target/release/*.sig
+          wab2b-helper/target/release/bundle/msi/*.msi.zip
+          wab2b-helper/target/release/bundle/msi/*.msi.zip.sig
+          latest.json

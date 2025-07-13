@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { AttachmentHandler } from "./components/AttachmentHandler";
@@ -6,6 +6,7 @@ import { UpdateNotification } from "./components/UpdateNotification";
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { Toast } from "./components/Toast";
 import { invoke } from "@tauri-apps/api/core";
+import { animate, createScope } from 'animejs';
 
 // Simple container component for toasts
 const ToastContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -54,6 +55,18 @@ function App() {
       setIsCheckingForUpdates(false);
     }
   };
+
+  useEffect(() => {
+    const scope = createScope({ root: document.querySelector('.main-content') });
+    scope.add(() => {
+      animate('.main-content', {
+        opacity: [0, 1],
+        duration: 1000,
+        easing: 'easeInOutQuad'
+      });
+    });
+    return () => scope.revert();
+  }, []);
 
   return (
     <ThemeProvider>
