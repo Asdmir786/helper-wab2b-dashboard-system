@@ -1,188 +1,48 @@
-name: Build & Release
-
+name: build-and-release
 on:
   push:
-    tags: ["v*"]          # e.g. v1.0.3, v2.1.0-beta
+    tags: ["v*.*.*"]           # fires on v1.2.3
 
 jobs:
-  build:
-    permissions:
-      contents: write
+  tauri:
     runs-on: windows-latest
 
+    # keep Cargo output and cache in the same custom folder
     env:
-      TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      CARGO_TARGET_DIR: wab2b-helper/target
+
+    permissions:
+      contents: write          # lets tauri-action draft & upload release
 
     steps:
-    ########################################################
-    # 1 ▸ Check out code
-    ########################################################
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    ########################################################
-    # 2 ▸ Install Node (with sub-folder cache)
-    ########################################################
-    - uses: actions/setup-node@v4
-      with:
-        node-version: lts/*
-        cache: npm
-        cache-dependency-path: wab2b-helper/package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22     # you chose Current; fine if your deps build on 22
+          check-latest: true
+          cache: npm
+          cache-dependency-path: wab2b-helper/package-lock.json
 
-    ########################################################
-    # 2½ ▸ Install Rust toolchain (REQUIRED for Tauri)
-    ########################################################
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      # Rust cache (quoted mapping so YAML parses the arrow correctly)
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "wab2b-helper/backend -> ../target"
 
-    - name: Install sccache
-      run: cargo install sccache --locked
+      - name: install app dependencies
+        working-directory: wab2b-helper
+        run: npm ci
 
-    - name: Cache Cargo registry
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('wab2b-helper/backend/Cargo.lock') }}
-        restore-keys: ${{ runner.os }}-cargo-registry-
-
-    - name: Cache Cargo git index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-git-${{ hashFiles('wab2b-helper/backend/Cargo.lock') }}
-        restore-keys: ${{ runner.os }}-cargo-git-
-
-    - name: Cache Cargo build target
-      uses: actions/cache@v4
-      with:
-        path: wab2b-helper/target
-        key: ${{ runner.os }}-cargo-target-${{ hashFiles('wab2b-helper/backend/Cargo.lock') }}
-        restore-keys: ${{ runner.os }}-cargo-target-
-
-    ########################################################
-    # 3 ▸ Install deps
-    ########################################################
-    - name: Install dependencies
-      working-directory: wab2b-helper
-      run: npm ci
-
-    ########################################################
-    # 4 ▸ Build the Tauri app (signed)
-    ########################################################
-    - name: Build (npm run tauri:build)
-      working-directory: wab2b-helper
-      env:
-        TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        TAURI_PRIVATE_KEY:                  ${{ secrets.TAURI_PRIVATE_KEY }}
-        TAURI_KEY_PASSWORD:                 ${{ secrets.TAURI_KEY_PASSWORD }}
-      run: npm run tauri:build
-
-    - name: List target/release files for debugging
-      shell: pwsh
-      run: Get-ChildItem -Path wab2b-helper/target/release -Recurse | ForEach-Object { $_.FullName }
-
-    - name: Generate latest.json for updater
-      shell: pwsh
-      run: |
-        $version = "${{ github.ref_name }}"
-        $zipFiles = Get-ChildItem -Path wab2b-helper/target/release/bundle/msi/*.msi.zip
-        if ($zipFiles.Count -eq 0) {
-          Write-Output "Warning: No .msi.zip files found! Updater artifacts may not have been generated."
-          return  # Skip JSON generation if no files
-        }
-        $zipFile = $zipFiles[0].Name
-        $sigFiles = Get-ChildItem -Path wab2b-helper/target/release/bundle/msi/*.msi.zip.sig
-        if ($sigFiles.Count -eq 0) {
-          Write-Output "Warning: No .msi.zip.sig files found! Signature missing."
-          $sigContent = ""
-        } else {
-          $sigFile = $sigFiles[0].Name
-          $sigContent = Get-Content "wab2b-helper/target/release/bundle/msi/$sigFile"
-        }
-        $pubDate = Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ"
-        $json = @{
-          version = $version
-          notes = "Release notes for $version"
-          pub_date = $pubDate
-          platforms = @{
-            "windows-x86_64" = @{
-              url = "https://github.com/${{ github.repository }}/releases/download/$version/$zipFile"
-              signature = $sigContent
-            }
-          }
-        } | ConvertTo-Json
-        $json | Out-File -FilePath latest.json
-        Write-Output "Generated latest.json with zip: $zipFile and sig: $sigContent"
-
-    ########################################################
-    # 5 ▸ Publish the release & upload binaries
-    ########################################################
-    - name: Set current date
-      id: date
-      shell: pwsh
-      run: echo "DATE=$(Get-Date -Format 'dd MMMM yyyy')" >> $GITHUB_OUTPUT
-
-    - name: Publish GitHub release
-      uses: softprops/action-gh-release@v2
-      if: github.ref_type == 'tag'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name:    ${{ github.ref_name }}
-        name:        "WAB2B Helper ${{ github.ref_name }}"
-        draft:       false
-        prerelease:  false
-        body: |
-          # WAB2B Helper ${{ github.ref_name }}
-
-          Release date: ${{ steps.date.outputs.DATE }}  
-          (tag `${{ github.ref_name }}`)
-
-          ---
-
-          ## ✨ Features
-          1. **Deep-Link Attachment Handler**  
-             • Handles `wab2b-helper:<url>` links fired from any browser.  
-             • Detects file type (image / video / document) instantly.  
-             • One-click actions: **Copy**, **Download & Save**, auto-open file.
-
-          2. **Automatic Updater**  
-             • Background check at startup + manual “Refresh” button.  
-             • Secure update pipeline via GitHub Releases + ed25519 signature.  
-             • Download progress bar, toast prompts, single-click install & restart.
-
-          3. **Dark / Light Theme Toggle**  
-             • Smooth transition using Tailwind CSS variables.  
-             • Remembers preference between launches.
-
-          4. **Toast Notification System**  
-             • Reusable React component (success / error).  
-             • Queueing, auto-dismiss, manual close.
-
-          ---
-
-          ## 🛠 Technical Highlights
-          * **Tauri v2.6** backend, **React 19 + Vite** frontend.  
-          * CI/CD: GitHub Actions builds, signs, publishes installers + `latest.json`.  
-          * Windows NSIS + MSI bundles provided; updater artifacts signed.  
-          * Codebase updated to Rust 2024 edition; all deps on latest stable versions.
-
-          ---
-
-          ## 🚀 Getting Started
-          1. Download `wab2b-helper_${{ github.ref_name }}_x64-setup.exe` from the assets below.  
-          2. Install and launch.  
-          3. Test deep-links: open a browser and navigate to  
-             ```
-             wab2b-helper:https://example.com/demo.pdf
-             ```  
-             The attachment panel will appear instantly.
-
-          Enjoy!  If you run into issues, open an issue on GitHub or email support@wab2b.com.
-        files: |
-          wab2b-helper/target/release/bundle/nsis/*.exe
-          wab2b-helper/target/release/bundle/msi/*.msi
-          wab2b-helper/target/release/bundle/msi/*.msi.zip
-          wab2b-helper/target/release/bundle/msi/*.msi.zip.sig
-          latest.json
+      # build, updater-sign, draft release, upload MSI + latest.json
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN:                       ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: wab2b-helper/backend
+          tagName:        ${{ github.ref_name }}
+          releaseName:    "v${{ github.ref_name }}"
+          releaseDraft:   true
+          releaseBody:    'See the assets to download this version and install.'
+          prerelease:     false
