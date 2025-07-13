@@ -1,30 +1,29 @@
 name: build-and-release
 on:
   push:
-    tags: ["v*.*.*"]           # fires on v1.2.3
+    tags: ["v*.*.*"]
 
 jobs:
   tauri:
     runs-on: windows-latest
 
-    # keep Cargo output and cache in the same custom folder
+    # Cargo output goes next to the crate
     env:
-      CARGO_TARGET_DIR: wab2b-helper/target
+      CARGO_TARGET_DIR: wab2b-helper/backend/target
 
     permissions:
-      contents: write          # lets tauri-action draft & upload release
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22     # you chose Current; fine if your deps build on 22
+          node-version: 22
           check-latest: true
           cache: npm
           cache-dependency-path: wab2b-helper/package-lock.json
 
-      # Rust cache (quoted mapping so YAML parses the arrow correctly)
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: "wab2b-helper/backend -> ../target"
@@ -33,7 +32,6 @@ jobs:
         working-directory: wab2b-helper
         run: npm ci
 
-      # build, updater-sign, draft release, upload MSI + latest.json
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN:                       ${{ secrets.GITHUB_TOKEN }}
@@ -41,8 +39,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: wab2b-helper/backend
-          tagName:        ${{ github.ref_name }}
-          releaseName:    "v${{ github.ref_name }}"
-          releaseDraft:   true
-          releaseBody:    'See the assets to download this version and install.'
-          prerelease:     false
+          tagName:      ${{ github.ref_name }}
+          releaseName:  "v${{ github.ref_name }}"
+          releaseDraft: true
+          releaseBody:  'See the assets to download this version and install.'
+          prerelease:   false
