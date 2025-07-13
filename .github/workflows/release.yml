@@ -86,9 +86,20 @@ jobs:
       shell: pwsh
       run: |
         $version = "${{ github.ref_name }}"
-        $zipFile = (Get-ChildItem -Path wab2b-helper/target/release/bundle/msi/*.msi.zip | Select-Object -First 1).Name
-        $sigFile = (Get-ChildItem -Path wab2b-helper/target/release/bundle/msi/*.msi.zip.sig | Select-Object -First 1).Name
-        $sigContent = Get-Content "wab2b-helper/target/release/bundle/msi/$sigFile"
+        $zipFiles = Get-ChildItem -Path wab2b-helper/target/release/bundle/msi/*.msi.zip
+        if ($zipFiles.Count -eq 0) {
+          Write-Output "Warning: No .msi.zip files found! Updater artifacts may not have been generated."
+          return  # Skip JSON generation if no files
+        }
+        $zipFile = $zipFiles[0].Name
+        $sigFiles = Get-ChildItem -Path wab2b-helper/target/release/bundle/msi/*.msi.zip.sig
+        if ($sigFiles.Count -eq 0) {
+          Write-Output "Warning: No .msi.zip.sig files found! Signature missing."
+          $sigContent = ""
+        } else {
+          $sigFile = $sigFiles[0].Name
+          $sigContent = Get-Content "wab2b-helper/target/release/bundle/msi/$sigFile"
+        }
         $pubDate = Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ"
         $json = @{
           version = $version
@@ -102,6 +113,7 @@ jobs:
           }
         } | ConvertTo-Json
         $json | Out-File -FilePath latest.json
+        Write-Output "Generated latest.json with zip: $zipFile and sig: $sigContent"
 
     ########################################################
     # 5 ▸ Publish the release & upload binaries
