@@ -7,15 +7,21 @@ jobs:
   tauri:
     runs-on: windows-latest
 
-    # Cargo output goes next to the crate
+    # ➊  Tell Cargo (and every cache) to use wab2b-helper/target
     env:
-      CARGO_TARGET_DIR: wab2b-helper/backend/target
+      CARGO_TARGET_DIR: wab2b-helper/target                # ← moved out of backend
 
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@v4
+
+      # ➋  Fast compiles: installs sccache & wires GHA-cache
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9         # :contentReference[oaicite:0]{index=0}
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -24,23 +30,26 @@ jobs:
           cache: npm
           cache-dependency-path: wab2b-helper/package-lock.json
 
+      # ➌  Rust cache now maps workspace → ../target (same dir as CARGO_TARGET_DIR)
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: "wab2b-helper/backend -> ../target"
+          workspaces: "wab2b-helper/backend -> ../target"   # :contentReference[oaicite:1]{index=1}
 
       - name: install app dependencies
         working-directory: wab2b-helper
         run: npm ci
 
+      # ➍  Build, updater-sign, draft release
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN:                       ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          projectPath: wab2b-helper/backend
+          projectPath: wab2b-helper/backend                   # crate still here
           tagName:      ${{ github.ref_name }}
           releaseName:  "v${{ github.ref_name }}"
           releaseDraft: true
           releaseBody:  'See the assets to download this version and install.'
           prerelease:   false
+          
