@@ -33,6 +33,30 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
 
+    - name: Install sccache
+      run: cargo install sccache --locked
+
+    - name: Cache Cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('wab2b-helper/backend/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-registry-
+
+    - name: Cache Cargo git index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-git-${{ hashFiles('wab2b-helper/backend/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-git-
+
+    - name: Cache Cargo build target
+      uses: actions/cache@v4
+      with:
+        path: wab2b-helper/target
+        key: ${{ runner.os }}-cargo-target-${{ hashFiles('wab2b-helper/backend/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-target-
+
     ########################################################
     # 3 ▸ Install deps
     ########################################################
