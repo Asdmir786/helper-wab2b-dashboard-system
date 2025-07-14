@@ -19,6 +19,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: wab2b-helper/package-lock.json
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
