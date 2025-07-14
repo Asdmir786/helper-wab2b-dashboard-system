@@ -51,7 +51,7 @@ jobs:
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           # Build with verbose output to see signing process
-          tauri build --bundles msi,nsis --config backend/tauri.conf.json --verbose
+          tauri build --bundles msi --bundles nsis --config backend/tauri.conf.json --verbose
           
           # Verify .sig files were created
           if (-not (Test-Path "backend/target/release/wab2b-helper.sig")) {
