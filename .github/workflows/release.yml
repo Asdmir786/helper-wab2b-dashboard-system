@@ -45,6 +45,7 @@ jobs:
 
       - name: Build the app
         working-directory: ./wab2b-helper
+        shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -53,29 +54,34 @@ jobs:
           npm run tauri:build -- --verbose
           
           # Verify .sig files were created
-          if [ ! -f "backend/target/release/wab2b-helper.sig" ]; then
-            echo "::error::No .sig file was generated. Check your signing configuration."
+          if (-not (Test-Path "backend/target/release/wab2b-helper.sig")) {
+            Write-Error "No .sig file was generated. Check your signing configuration."
             exit 1
-          fi
+          }
 
       - name: Verify artifacts
+        shell: pwsh
         run: |
           # Check if all required files exist
-          if [ ! -f "wab2b-helper/backend/target/release/wab2b-helper.sig" ]; then
-            echo "::error::Missing .sig file"
-            ls -la wab2b-helper/backend/target/release/
+          if (-not (Test-Path "wab2b-helper/backend/target/release/wab2b-helper.sig")) {
+            Write-Error "Missing .sig file"
+            Get-ChildItem -Path "wab2b-helper/backend/target/release/"
             exit 1
-          fi
+          }
+
+          $version = (Get-Content -Raw -Path wab2b-helper/package.json | ConvertFrom-Json).version
+          $msiPath = "wab2b-helper/backend/target/release/bundle/msi/WAB2B Helper_${version}_x64_en-US.msi"
+          $nsisPath = "wab2b-helper/backend/target/release/bundle/nsis/WAB2B Helper_${version}_x64-setup.exe"
+
+          if (-not (Test-Path $msiPath)) {
+            Write-Error "Missing MSI installer at path: $msiPath"
+            exit 1
+          }
           
-          if [ ! -f "wab2b-helper/backend/target/release/bundle/msi/$(node -p "require('./wab2b-helper/package.json').name.replace('@', '').replace('/', '-')_$npm_package_version_x64_en-US.msi")" ]; then
-            echo "::error::Missing MSI installer"
+          if (-not (Test-Path $nsisPath)) {
+            Write-Error "Missing NSIS installer at path: $nsisPath"
             exit 1
-          fi
-          
-          if [ ! -f "wab2b-helper/backend/target/release/bundle/nsis/$(node -p "require('./wab2b-helper/package.json').name.replace('@', '').replace('/', '-')_$npm_package_version_x64-setup.exe")" ]; then
-            echo "::error::Missing NSIS installer"
-            exit 1
-          fi
+          }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
