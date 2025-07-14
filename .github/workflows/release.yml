@@ -54,7 +54,7 @@ jobs:
           tauri build --bundles msi --bundles nsis --config backend/tauri.conf.json --verbose
           
           # Verify .sig files were created
-          if (-not (Test-Path "backend/target/release/wab2b-helper.sig")) {
+          if (-not (Test-Path "backend/target/release/wab2b-helper.exe.sig")) {
             Write-Error "No .sig file was generated. Check your signing configuration."
             exit 1
           }
@@ -63,7 +63,7 @@ jobs:
         shell: pwsh
         run: |
           # Check if all required files exist
-          if (-not (Test-Path "wab2b-helper/backend/target/release/wab2b-helper.sig")) {
+          if (-not (Test-Path "wab2b-helper/backend/target/release/wab2b-helper.exe.sig")) {
             Write-Error "Missing .sig file"
             Get-ChildItem -Path "wab2b-helper/backend/target/release/"
             exit 1
