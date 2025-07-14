@@ -39,11 +39,11 @@ jobs:
         run: npm install -g @tauri-apps/cli
 
       - name: Install dependencies
-        working-directory: wab2b-helper
+        working-directory: ./wab2b-helper
         run: npm ci
 
       - name: Build the app
-        working-directory: wab2b-helper
+        working-directory: ./wab2b-helper
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -66,12 +66,12 @@ jobs:
             exit 1
           fi
           
-          if [ ! -f "wab2b-helper/backend/target/release/bundle/msi/wab2b-helper_$(node -p "require('./wab2b-helper/package.json').version")_x64.msi" ]; then
+          if [ ! -f "wab2b-helper/backend/target/release/bundle/msi/$(node -p "require('./wab2b-helper/package.json').name.replace('@', '').replace('/', '-')_$npm_package_version_x64_en-US.msi")" ]; then
             echo "::error::Missing MSI installer"
             exit 1
           fi
           
-          if [ ! -f "wab2b-helper/backend/target/release/bundle/nsis/wab2b-helper_$(node -p "require('./wab2b-helper/package.json').version")_x64-setup.exe" ]; then
+          if [ ! -f "wab2b-helper/backend/target/release/bundle/nsis/$(node -p "require('./wab2b-helper/package.json').name.replace('@', '').replace('/', '-')_$npm_package_version_x64-setup.exe")" ]; then
             echo "::error::Missing NSIS installer"
             exit 1
           fi
