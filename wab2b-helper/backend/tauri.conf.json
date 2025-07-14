@@ -34,8 +34,13 @@
       "endpoints": [
         "https://api.github.com/repos/Asdmir786/helper-wab2b-dashboard-system/releases/latest"
       ],
-      "dialog": false,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE3OEFFNEFFRkM1NERFNDQKUldSRTNsVDhydVNLRjg2RWdJTFY4L3hQR1U2ekhNd3hMVjF2YXFZRWcxdGFkSG9PL1l4QWpSY3QK"
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE3OEFFNEFFRkM1NERFNDQKUldSRTNsVDhydVNLRjg2RWdJTFY4L3hQR1U2ekhNd3hMVjF2YXFZRWcxdGFkSG9PL1l4QWpSY3QK",
+      "signatureType": "file",
+      "windows": {
+        "publisher": "WAB2B",
+        "timestampUrl": "http://timestamp.digicert.com"
+      }
     }
   },
   "bundle": {

@@ -1,36 +1,130 @@
-name: build-and-release
+name: Publish Tauri App
 on:
   push:
-    tags: ["v*.*.*"]
+    tags: ['v*.*.*']
+  workflow_dispatch:
 
 jobs:
-  tauri:
+  build:
     runs-on: windows-latest
-
+    
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@v4
 
-      # ➋  Fast compiles: installs sccache & wires GHA-cache
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9         # :contentReference[oaicite:0]{index=0}
+        uses: mozilla-actions/sccache-action@v0.0.9
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-node@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          node-version: 22
-          check-latest: true
-          cache: npm
-          cache-dependency-path: wab2b-helper/package-lock.json
+          components: rust-src, rustfmt, clippy
 
-      - name: install app dependencies
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'wab2b-helper/backend -> wab2b-helper/backend/target'
+
+      - name: Install Tauri CLI
+        run: npm install -g @tauri-apps/cli
+
+      - name: Install dependencies
         working-directory: wab2b-helper
         run: npm ci
 
-      # ➍  Release with Tauri Action
+      - name: Build the app
+        working-directory: wab2b-helper
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          # Build with verbose output to see signing process
+          npm run tauri:build -- --verbose
+          
+          # Verify .sig files were created
+          if [ ! -f "backend/target/release/wab2b-helper.sig" ]; then
+            echo "::error::No .sig file was generated. Check your signing configuration."
+            exit 1
+          fi
+
+      - name: Verify artifacts
+        run: |
+          # Check if all required files exist
+          if [ ! -f "wab2b-helper/backend/target/release/wab2b-helper.sig" ]; then
+            echo "::error::Missing .sig file"
+            ls -la wab2b-helper/backend/target/release/
+            exit 1
+          fi
+          
+          if [ ! -f "wab2b-helper/backend/target/release/bundle/msi/wab2b-helper_$(node -p "require('./wab2b-helper/package.json').version")_x64.msi" ]; then
+            echo "::error::Missing MSI installer"
+            exit 1
+          fi
+          
+          if [ ! -f "wab2b-helper/backend/target/release/bundle/nsis/wab2b-helper_$(node -p "require('./wab2b-helper/package.json').version")_x64-setup.exe" ]; then
+            echo "::error::Missing NSIS installer"
+            exit 1
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: |
+            wab2b-helper/backend/target/release/bundle/msi/*.msi
+            wab2b-helper/backend/target/release/bundle/nsis/*.exe
+            wab2b-helper/backend/target/release/*.sig
+          if-no-files-found: error
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            wab2b-helper/backend/target/release/bundle/msi/*.msi
+            wab2b-helper/backend/target/release/bundle/nsis/*.exe
+            wab2b-helper/backend/target/release/*.sig
+          body: |
+            ## v1.0.3 - 2025-07-14
+
+            ### 🚀 New Features
+            - Added cross-env for Windows compatibility
+            - Enabled NSIS bundling for Windows installers
+
+            ### 🐛 Bug Fixes
+            - Fixed CI/CD pipeline configuration
+            - Resolved build script issues
+            - Removed duplicate build arguments
+
+            ### 🛠️ Development
+            - Updated Tauri action to @dev for better updater support
+            - Cleaned up package.json scripts
+            - Improved build process reliability
+
+            ### 📦 Dependencies
+            - Added cross-env v7.0.3
+            - Updated Tauri-related dependencies
+
+            ### 📝 Notes
+            - This release focuses on improving the build process and Windows compatibility
+            - The application now includes a proper NSIS installer for Windows
+            - Auto-update functionality has been enhanced with proper signing
+
+            ## How to Update
+            - Download the latest installer from the release assets
+            - The application will automatically check for updates on startup
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: tauri-apps/tauri-action@dev
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
