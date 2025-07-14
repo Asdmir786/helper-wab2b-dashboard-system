@@ -3,6 +3,14 @@ use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri::Emitter;
 use tauri_plugin_updater::UpdaterExt;
+use clipboard_win::raw;
+use url::Url;
+use std::env;
+use std::fs;
+use std::path::Path;
+use sha2::{Digest, Sha256};
+use tokio::io::AsyncWriteExt;
+use serde::Deserialize;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -10,21 +18,104 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-#[tauri::command]
-async fn copy_to_clipboard(url: &str) -> Result<bool, String> {
-    // This is a simplified implementation. For production, you would:
-    // 1. Fetch the content from the URL
-    // 2. Check the content type
-    // 3. Use the appropriate clipboard method
+#[derive(Deserialize)]
+struct Asset {
+    name: String,
+    browser_download_url: String,
+}
 
-    // For text/url copy
-    if let Err(e) = std::process::Command::new("clip")
-        .arg(url)
-        .spawn() {
-        return Err(format!("Failed to copy to clipboard: {}", e));
+#[derive(Deserialize)]
+struct Release {
+    tag_name: String,
+    assets: Vec<Asset>,
+}
+
+const GITHUB_OWNER: &str = "Asdmir786";
+const GITHUB_REPO: &str = "helper-wab2b-dashboard-system";
+const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[tauri::command]
+async fn check_update_manual() -> Result<bool, String> {
+    let client = reqwest::Client::new();
+    let url = format!("https://api.github.com/repos/{}/{}/releases/latest", GITHUB_OWNER, GITHUB_REPO);
+    let rel: Release = client
+        .get(url)
+        .header("User-Agent", "wab2b-helper-updater")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if rel.tag_name.as_str() <= CURRENT_VERSION {
+        return Ok(false); // already up-to-date
     }
-    
+
+    // find MSI and SHA assets
+    let msi_asset = rel
+        .assets
+        .iter()
+        .find(|a| a.name.ends_with(".msi"))
+        .ok_or("MSI asset not found")?;
+    let sha_asset = rel
+        .assets
+        .iter()
+        .find(|a| a.name.ends_with(".sha256"))
+        .ok_or("SHA asset not found")?;
+
+    let tmp_dir = std::env::temp_dir();
+    let msi_path = tmp_dir.join(&msi_asset.name);
+    let sha_path = tmp_dir.join(&sha_asset.name);
+
+    download_to(&client, &msi_asset.browser_download_url, &msi_path).await?;
+    download_to(&client, &sha_asset.browser_download_url, &sha_path).await?;
+
+    verify_sha(&msi_path, &sha_path)?;
+
+    // launch installer
+    std::process::Command::new("msiexec")
+        .args(["/i", msi_path.to_str().unwrap(), "/passive"])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
     Ok(true)
+}
+
+async fn download_to(client: &reqwest::Client, url: &str, path: &Path) -> Result<(), String> {
+    let data = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .bytes()
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut file = tokio::fs::File::create(path)
+        .await
+        .map_err(|e| e.to_string())?;
+    file.write_all(&data).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn verify_sha(file_path: &Path, sha_path: &Path) -> Result<(), String> {
+    let expected = std::fs::read_to_string(sha_path)
+        .map_err(|e| e.to_string())?
+        .split_whitespace()
+        .next()
+        .ok_or("Invalid SHA file")?
+        .to_string();
+
+    let mut file = std::fs::File::open(file_path).map_err(|e| e.to_string())?;
+    let mut hasher = Sha256::new();
+    std::io::copy(&mut file, &mut hasher).map_err(|e| e.to_string())?;
+    let actual = format!("{:x}", hasher.finalize());
+
+    if actual == expected {
+        Ok(())
+    } else {
+        Err("SHA256 mismatch".into())
+    }
 }
 
 #[tauri::command]
@@ -115,6 +206,30 @@ async fn download_and_install_update(app_handle: tauri::AppHandle) -> Result<(),
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[tauri::command]
+async fn copy_attachment(url_str: String) -> Result<(), String> {
+    // 1. Parse the URL and get the filename
+    let url = Url::parse(&url_str).map_err(|e| e.to_string())?;
+    let file_name = url.path_segments().and_then(|s| s.last()).unwrap_or("downloaded_file");
+
+    // 2. Create a temporary path for the file
+    let temp_dir = env::temp_dir();
+    let temp_file_path = temp_dir.join(file_name);
+
+    // 3. Download the file
+    let response = reqwest::get(url).await.map_err(|e| e.to_string())?;
+    let content = response.bytes().await.map_err(|e| e.to_string())?;
+
+    // 4. Save the file to the temporary path
+    fs::write(&temp_file_path, &content).map_err(|e| e.to_string())?;
+
+    // 5. Copy the file to the clipboard as a file drop (attachment)
+    let file_str = temp_file_path.to_string_lossy().into_owned();
+    raw::set_file_list(&[file_str.as_str()]).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -164,12 +279,13 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            copy_attachment,
             greet, 
-            copy_to_clipboard, 
             download_file, 
             parse_url_scheme,
             check_update,
-            download_and_install_update
+            download_and_install_update,
+            check_update_manual
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

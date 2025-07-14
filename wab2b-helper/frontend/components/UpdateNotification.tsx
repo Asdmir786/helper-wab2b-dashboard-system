@@ -71,7 +71,7 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({ addToast
   return (
     <div className="fixed bottom-4 left-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md glass-morphism z-40">
       <div className="flex items-center gap-3">
-        <ArrowUpCircleIcon className="h-6 w-6 text-blue-500" />
+        <ArrowUpCircleIcon onClick={installUpdate} className="h-6 w-6 text-blue-500 hover:text-blue-600" style={{ cursor: 'pointer' }} />
         <div className="flex-1">
           <h3 className="font-medium text-[var(--panel-text)]">
             Update available: v{newVersion}

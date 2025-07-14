@@ -1,6 +1,6 @@
 [package]
 name = "wab2b-helper"
-version = "1.0.3"
+version = "1.0.4"
 description = "A Desktop App, which is a helper for dashboard.wab2b.com for copying attachments."
 authors = ["Asdmir786"]
 edition = "2024"
@@ -27,5 +27,7 @@ tauri-plugin-dialog = "2.3.0"
 tauri-plugin-deep-link = "2.4.0"
 tauri-plugin-updater = "2.9.0"
 reqwest = { version = "0.12", features = ["json", "stream"] }
+clipboard-win = "5.4.0"
+url = "2.5.4"
 tokio = { version = "1", features = ["full"] }
-
+sha2 = "0.10"

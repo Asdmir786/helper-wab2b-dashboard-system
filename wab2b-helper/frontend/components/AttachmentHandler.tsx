@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { writeText, writeImage } from '@tauri-apps/plugin-clipboard-manager';
 import { save } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
 import { CheckIcon, DocumentIcon, PhotoIcon, VideoCameraIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
@@ -17,6 +16,7 @@ export const AttachmentHandler: React.FC<AttachmentHandlerProps> = ({ onClose, a
   const [fileName, setFileName] = useState<string>('attachment');
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [isCopying, setIsCopying] = useState<boolean>(false);
 
   useEffect(() => {
     // Listen for attachment URL events from the Rust backend
@@ -41,7 +41,7 @@ export const AttachmentHandler: React.FC<AttachmentHandlerProps> = ({ onClose, a
       }
       
       // Automatically copy to clipboard
-      copyToClipboard(url);
+      copyAttachment(url);
     });
 
     return () => {
@@ -49,34 +49,22 @@ export const AttachmentHandler: React.FC<AttachmentHandlerProps> = ({ onClose, a
     };
   }, []);
 
-  const copyToClipboard = async (url: string) => {
+  const copyAttachment = async (url: string) => {
+    if (!url || isCopying) return;
+
+    setIsCopying(true);
+    setIsCopied(false); // Reset status on new copy attempt
+
     try {
-      if (attachmentType === 'image') {
-        // For images, fetch and convert to data URL
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const reader = new FileReader();
-        reader.onload = async function() {
-          const dataUrl = reader.result as string;
-          try {
-            await writeImage(dataUrl);
-            setIsCopied(true);
-            addToast(`Image copied to clipboard!`, 'success');
-          } catch (error) {
-            console.error('Failed to copy image:', error);
-            addToast(`Failed to copy image`, 'error');
-          }
-        };
-        reader.readAsDataURL(blob);
-      } else {
-        // For other types, just copy the URL
-        await writeText(url);
-        setIsCopied(true);
-        addToast(`Attachment URL copied to clipboard!`, 'success');
-      }
+      await invoke('copy_attachment', { urlStr: url });
+      setIsCopied(true);
+      addToast('Attachment copied!', 'success');
     } catch (error) {
-      console.error('Error copying to clipboard:', error);
-      addToast(`Failed to copy to clipboard`, 'error');
+      const errorMessage = typeof error === 'string' ? error : 'An unknown error occurred';
+      console.error('Failed to copy attachment:', error);
+      addToast(`Failed to copy attachment: ${errorMessage}`, 'error');
+    } finally {
+      setIsCopying(false);
     }
   };
 
@@ -160,26 +148,31 @@ export const AttachmentHandler: React.FC<AttachmentHandlerProps> = ({ onClose, a
           </div>
 
           <div className="mt-2 flex items-center">
-            <div className="flex-1 text-sm text-green-600 dark:text-green-400 flex items-center">
-              <CheckIcon className="h-5 w-5 mr-1" />
-              Copied to clipboard
-            </div>
+            {isCopied && (
+              <div className="flex-1 text-sm text-green-600 dark:text-green-400 flex items-center">
+                <CheckIcon className="h-5 w-5 mr-1" />
+                Attachment copied!
+              </div>
+            )}
           </div>
         </div>
 
         <div className="mt-6 flex space-x-4 justify-center">
           <button
             type="button"
-            className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center ${isCopied ? 'bg-green-600 hover:bg-green-700' : ''}`}
-            onClick={() => copyToClipboard(attachmentUrl)}
+            className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center ${isCopying ? 'opacity-75 cursor-not-allowed' : ''} ${isCopied ? 'bg-green-600 hover:bg-green-700' : ''}`}
+            onClick={() => copyAttachment(attachmentUrl!)}
+            disabled={isCopying}
           >
-            {isCopied ? (
+            {isCopying ? (
+              'Copying...'
+            ) : isCopied ? (
               <>
                 <CheckIcon className="h-5 w-5 mr-1" />
-                Copied
+                Copied!
               </>
             ) : (
-              'Copy Again'
+              'Copy Attachment'
             )}
           </button>
           <button
