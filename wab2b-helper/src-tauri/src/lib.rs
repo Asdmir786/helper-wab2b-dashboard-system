@@ -6,7 +6,7 @@ use tauri::Emitter;
 use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
 use url::Url;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use tokio::io::AsyncWriteExt;
 use futures_util::StreamExt;
 use std::fs;
@@ -249,57 +249,30 @@ async fn handle_save_dialog_result(
     // Get the file info - avoid MutexGuard across await points
     let file_info = {
         let app_state = state.lock().unwrap();
-        app_state.downloaded_files
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| Error::FileNotFound(id.clone()))?
+        app_state.downloaded_files.get(&id).cloned().ok_or_else(|| Error::FileNotFound(id.clone()))?
     };
     
     // Copy the file to the destination
-    let destination = PathBuf::from(save_path);
-    fs::copy(&file_info.file_path, &destination)?;
+    fs::copy(&file_info.file_path, &save_path)?;
     
-    Ok(destination.to_string_lossy().to_string())
+    Ok(save_path)
 }
 
-// Command to set the theme
 #[tauri::command]
 fn set_theme(app_handle: AppHandle, theme: String) -> Result<(), Error> {
-    // Save theme preference
-    // In a real app, you might want to save this to a config file
-    
-    // Emit theme changed event
-    app_handle.emit("theme-changed", theme).unwrap();
-    
-    Ok(())
+  let window = app_handle.get_webview_window("main").unwrap();
+  window.emit("theme-changed", theme).unwrap();
+  Ok(())
 }
 
-// Main entry point
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let state = init_app_state().expect("Failed to initialize app state");
+
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
+        .manage(Arc::new(Mutex::new(state)))
         .plugin(tauri_plugin_deep_link::init())
-        .setup(|app| {
-            // Initialize app state
-            let app_state = init_app_state().map_err(|e| anyhow!(format!("Failed to initialize app state: {}", e)))?;
-            app.manage(Arc::new(Mutex::new(app_state)));
-            
-            // Register deep links for development
-            #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
-            {
-                use tauri_plugin_deep_link::DeepLinkExt;
-                app.deep_link().register_all()?;
-            }
-            
-            // Get the main window
-            let window = app.get_webview_window("main").unwrap();
-            
-            // Set window decorations
-            window.set_decorations(false).unwrap();
-            
-            Ok(())
-        })
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             download_file,
             get_current_file,
@@ -307,7 +280,7 @@ pub fn run() {
             copy_to_clipboard,
             save_file,
             handle_save_dialog_result,
-            set_theme,
+            set_theme
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

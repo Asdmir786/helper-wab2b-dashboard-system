@@ -2,10 +2,15 @@
 
 /* Custom styles */
 :root {
-  --app-bg-light: #FFFFFF;
-  --app-bg-dark: #1F2937;
-  --app-text-light: #1F2937;
-  --app-text-dark: #F9FAFB;
+  --app-bg-light: #F8FAFC;
+  --app-bg-dark: #121212;
+  --app-text-light: #1E293B;
+  --app-text-dark: #F1F5F9;
+  --primary-light: #2563EB;
+  --primary-dark: #60A5FA;
+  --surface-light: #FFFFFF;
+  --surface-dark: #1E293B;
+  --border-light: #E2E8F0;
 }
 
 html, body {
@@ -14,6 +19,11 @@ html, body {
   height: 100%;
   width: 100%;
   overflow: hidden;
+  background-color: var(--app-bg-light);
+}
+
+.dark html, .dark body {
+  background-color: var(--app-bg-dark);
 }
 
 body {
@@ -25,12 +35,17 @@ body {
 #root {
   height: 100%;
   width: 100%;
+  background-color: var(--app-bg-light);
+}
+
+.dark #root {
+  background-color: var(--app-bg-dark);
 }
 
 /* Titlebar styles */
 .titlebar {
-  height: 30px;
-  background: transparent;
+  height: 32px;
+  background: var(--surface-light);
   user-select: none;
   display: flex;
   justify-content: flex-end;
@@ -39,15 +54,24 @@ body {
   left: 0;
   right: 0;
   z-index: 50;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.dark .titlebar {
+  background: var(--surface-dark);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  border-bottom: 1px solid rgba(55, 65, 81, 0.5);
 }
 
 .titlebar-button {
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
 }
 
 /* Custom scrollbar */
@@ -61,71 +85,86 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
+  background: #CBD5E1;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: #94A3B8;
 }
 
-/* Animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.fade-in {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-.slide-up {
-  animation: slideUp 0.3s ease-in-out;
-}
-
-/* Transitions */
-.transition-all {
-  transition-property: all;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748B;
 }
 
 /* Loading spinner */
 .spinner {
-  border: 3px solid rgba(0, 0, 0, 0.1);
+  border: 3px solid rgba(203, 213, 225, 0.3);
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border-left-color: #3B82F6;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
+  border-left-color: var(--primary-light);
 }
 
 /* Dark mode spinner */
 .dark .spinner {
-  border-color: rgba(255, 255, 255, 0.1);
-  border-left-color: #60A5FA;
+  border-color: rgba(71, 85, 105, 0.3);
+  border-left-color: var(--primary-dark);
+}
+
+/* Make sure the main container has a solid background */
+main {
+  background-color: var(--app-bg-light);
+  color: var(--app-text-light);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.dark main {
+  background-color: var(--app-bg-dark);
+  color: var(--app-text-dark);
+  box-shadow: none;
+}
+
+/* Animation target classes */
+.fade-element {
+  opacity: 0;
+}
+
+.slide-element {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+/* Light mode specific styles */
+.waiting-container {
+  background: linear-gradient(to bottom, #EFF6FF, #F8FAFC);
+  border: 1px solid var(--border-light);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05), 0 10px 15px rgba(0,0,0,0.025);
+}
+
+.dark .waiting-container {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(55, 65, 81, 0.5);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.waiting-container p, .waiting-container div {
+  color: inherit !important;
+}
+
+/* Input and button styles */
+input {
+  border: 1px solid var(--border-light);
+  background-color: var(--surface-light);
+  color: var(--app-text-light);
+}
+
+.dark input {
+  border-color: rgba(55, 65, 81, 0.5);
+  background-color: rgba(17, 24, 39, 0.8);
+  color: var(--app-text-dark);
 }

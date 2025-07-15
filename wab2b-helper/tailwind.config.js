@@ -1,31 +1,36 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
+  content: [
+    './index.html',
+    './src/**/*.{js,ts,jsx,tsx}',
+  ],
   theme: {
     extend: {
       colors: {
         primary: {
-          light: '#3B82F6', // Blue
-          dark: '#60A5FA',
+          light: '#2563EB', // Blue 600 – darker accent for light mode
+          dark: '#60A5FA',  // Blue 400 – lighter accent for dark mode
         },
         secondary: {
-          light: '#6366F1', // Indigo
-          dark: '#818CF8',
+          light: '#4F46E5', // Indigo 600
+          dark: '#818CF8',  // Indigo 400
         },
         background: {
-          light: '#FFFFFF',
-          dark: '#1F2937',
+          light: '#F8FAFC', // Gray-50 – softer than pure white
+          dark: '#121212',  // Near-black per modern dark-UI guidance
         },
         surface: {
-          light: '#F3F4F6',
-          dark: '#374151',
+          light: '#FFFFFF', // Pure white cards on light mode
+          dark: '#1E293B',  // Gray-800 – lighter surface for dark mode
         },
         text: {
-          light: '#1F2937',
-          dark: '#F9FAFB',
+          light: '#1F2937', // Gray-800
+          dark: '#F1F5F9',  // Gray-100 – off-white to avoid pure white
         },
         border: {
-          light: '#E5E7EB',
-          dark: '#4B5563',
+          light: '#E2E8F0', // Gray-200
+          dark: '#334155',  // Gray-700 – subtle borders in dark mode
         },
       },
       animation: {
