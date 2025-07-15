@@ -17,15 +17,50 @@ Based on the most recent industry standards and best practices, our application 
 
 - **Frontend**:
 
-  - React v19.0.0
-  - TypeScript 5.5+
-  - Tailwind CSS v3.4+
+  - React v18.3.1
+  - TypeScript 5.6.2
+  - Tailwind CSS v4.1.11
   - Anime.js v4.0.2
 
 - **Development Environment**:
   - Node.js v22.17 LTS (fixed requirement)
   - npm v10.x+
-  - Vite v5.x+
+  - Vite v6.0.3
+
+### Versioning Schema
+
+Our application will follow Semantic Versioning (SemVer) principles with the format `MAJOR.MINOR.PATCH` and appropriate pre-release identifiers:
+
+- **Alpha Releases** (`0.1.0-alpha.1`, `0.1.0-alpha.2`, etc.)
+  - Initial development phase
+  - Internal testing only
+  - Incomplete features and known bugs
+  - Used for early feedback from the development team
+  - May have significant changes between releases
+
+- **Beta Releases** (`0.1.0-beta.1`, `0.1.0-beta.2`, etc.)
+  - Feature complete but may have known issues
+  - External testing with selected users
+  - More stable than alpha but not production-ready
+  - Used for gathering user feedback and real-world testing
+  - API and functionality mostly stabilized
+
+- **Release Candidates** (`0.1.0-rc.1`, `0.1.0-rc.2`, etc.)
+  - Final testing phase before production release
+  - Feature and API freeze
+  - Only critical bug fixes allowed
+  - Near production quality
+  - Final verification with real-world usage
+
+- **Production Releases** (`0.1.0`, `0.2.0`, `1.0.0`, etc.)
+  - Stable, production-ready software
+  - Public release
+  - Following SemVer:
+    - MAJOR: Incompatible API changes
+    - MINOR: New features (backwards compatible)
+    - PATCH: Bug fixes (backwards compatible)
+
+The application will start at version `0.1.0-alpha.1` during initial development, progressing through beta and RC stages before reaching the first stable release.
 
 ### Key Features
 

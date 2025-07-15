@@ -1,0 +1,314 @@
+use std::path::PathBuf;
+use std::sync::Mutex;
+use std::collections::HashMap;
+use tauri::{Manager, AppHandle};
+use tauri::Emitter;
+use serde::{Deserialize, Serialize};
+use tempfile::TempDir;
+use url::Url;
+use anyhow::{Result, anyhow};
+use tokio::io::AsyncWriteExt;
+use futures_util::StreamExt;
+use std::fs;
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
+use mime_guess::from_path;
+
+// Global state to store downloaded files
+struct AppState {
+    temp_dir: TempDir,
+    current_file: Option<FileInfo>,
+    downloaded_files: HashMap<String, FileInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileInfo {
+    id: String,
+    original_url: String,
+    file_path: String,
+    file_name: String,
+    mime_type: String,
+    size: u64,
+}
+
+// Error types
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error("Failed to download file: {0}")]
+    DownloadError(String),
+    
+    #[error("Invalid URL: {0}")]
+    InvalidUrl(String),
+    
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+    
+    #[error("Request error: {0}")]
+    RequestError(#[from] reqwest::Error),
+    
+    #[error("File not found: {0}")]
+    FileNotFound(String),
+}
+
+impl serde::Serialize for Error {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.to_string().as_ref())
+    }
+}
+
+// Initialize the app state
+fn init_app_state() -> Result<AppState> {
+    let temp_dir = tempfile::Builder::new()
+        .prefix("wab2b-helper-")
+        .tempdir()?;
+    
+    Ok(AppState {
+        temp_dir,
+        current_file: None,
+        downloaded_files: HashMap::new(),
+    })
+}
+
+// Command to download a file from a URL
+#[tauri::command]
+async fn download_file(
+    app_handle: AppHandle,
+    url: String,
+) -> Result<FileInfo, Error> {
+    // Parse the URL
+    let parsed_url = Url::parse(&url).map_err(|_| Error::InvalidUrl(url.clone()))?;
+    
+    // Extract the file name from the URL
+    let file_name = parsed_url
+        .path_segments()
+        .and_then(|segments| segments.last())
+        .unwrap_or("downloaded_file")
+        .to_string();
+    
+    // Generate a unique ID for this file
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let id = format!("file_{}", timestamp);
+    
+    // Get the app state
+    let state = app_handle.state::<Arc<Mutex<AppState>>>();
+    
+    // Create the temp file path - avoid MutexGuard across await points
+    let file_path = {
+        let app_state = state.lock().unwrap();
+        app_state.temp_dir.path().join(&file_name)
+    };
+    
+    // Create the file
+    let mut file = tokio::fs::File::create(&file_path).await?;
+    
+    // Download the file
+    let client = reqwest::Client::new();
+    let res = client.get(&url).send().await?;
+    
+    if !res.status().is_success() {
+        return Err(Error::DownloadError(format!(
+            "Failed to download file: HTTP status {}",
+            res.status()
+        )));
+    }
+    
+    // Get the content length if available
+    let content_length = res.content_length().unwrap_or(0);
+    
+    // Stream the response body to the file
+    let mut stream = res.bytes_stream();
+    let mut downloaded_size = 0;
+    
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        file.write_all(&chunk).await?;
+        downloaded_size += chunk.len() as u64;
+        
+        // Emit progress event
+        if content_length > 0 {
+            let progress = (downloaded_size as f64 / content_length as f64) * 100.0;
+            app_handle.emit("download-progress", progress).unwrap();
+        }
+    }
+    
+    // Get the MIME type
+    let mime_type = from_path(&file_path)
+        .first_or_octet_stream()
+        .to_string();
+    
+    // Create the file info
+    let file_info = FileInfo {
+        id: id.clone(),
+        original_url: url,
+        file_path: file_path.to_string_lossy().to_string(),
+        file_name,
+        mime_type,
+        size: downloaded_size,
+    };
+    
+    // Update the app state
+    let mut app_state = state.lock().unwrap();
+    app_state.current_file = Some(file_info.clone());
+    app_state.downloaded_files.insert(id, file_info.clone());
+    
+    Ok(file_info)
+}
+
+// Command to get the current file info
+#[tauri::command]
+fn get_current_file(app_handle: AppHandle) -> Option<FileInfo> {
+    let state = app_handle.state::<Arc<Mutex<AppState>>>();
+    let app_state = state.lock().unwrap();
+    app_state.current_file.clone()
+}
+
+// Command to get a file by ID
+#[tauri::command]
+fn get_file_by_id(app_handle: AppHandle, id: String) -> Result<FileInfo, Error> {
+    let state = app_handle.state::<Arc<Mutex<AppState>>>();
+    let app_state = state.lock().unwrap();
+    
+    app_state.downloaded_files
+        .get(&id)
+        .cloned()
+        .ok_or_else(|| Error::FileNotFound(id))
+}
+
+// Command to copy file to clipboard
+#[tauri::command]
+async fn copy_to_clipboard(app_handle: AppHandle, id: String) -> Result<bool, Error> {
+    let state = app_handle.state::<Arc<Mutex<AppState>>>();
+    
+    // Get the file info - avoid MutexGuard across await points
+    let file_info = {
+        let app_state = state.lock().unwrap();
+        app_state.downloaded_files
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| Error::FileNotFound(id.clone()))?
+    };
+    
+    // Emit event to let frontend handle the clipboard operation
+    // since Tauri doesn't have direct clipboard file support
+    app_handle.emit("copy-to-clipboard", &file_info).unwrap();
+    
+    Ok(true)
+}
+
+// Command to save file to a specific location
+#[tauri::command]
+async fn save_file(
+    app_handle: AppHandle,
+    id: String,
+    save_path: Option<String>,
+) -> Result<String, Error> {
+    let state = app_handle.state::<Arc<Mutex<AppState>>>();
+    
+    // Get the file info - avoid MutexGuard across await points
+    let file_info = {
+        let app_state = state.lock().unwrap();
+        app_state.downloaded_files
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| Error::FileNotFound(id.clone()))?
+    };
+    
+    // If save_path is provided, save to that location
+    // Otherwise, prompt the user for a location
+    let destination = if let Some(path) = save_path {
+        PathBuf::from(path)
+    } else {
+        // Emit event to let frontend handle the save dialog
+        app_handle.emit("save-file-dialog", &file_info).unwrap();
+        
+        // This is a placeholder, the actual path will be provided by the frontend
+        return Ok("pending".to_string());
+    };
+    
+    // Copy the file to the destination
+    fs::copy(&file_info.file_path, &destination)?;
+    
+    Ok(destination.to_string_lossy().to_string())
+}
+
+// Command to handle the save file dialog result
+#[tauri::command]
+async fn handle_save_dialog_result(
+    app_handle: AppHandle,
+    id: String,
+    save_path: String,
+) -> Result<String, Error> {
+    let state = app_handle.state::<Arc<Mutex<AppState>>>();
+    
+    // Get the file info - avoid MutexGuard across await points
+    let file_info = {
+        let app_state = state.lock().unwrap();
+        app_state.downloaded_files
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| Error::FileNotFound(id.clone()))?
+    };
+    
+    // Copy the file to the destination
+    let destination = PathBuf::from(save_path);
+    fs::copy(&file_info.file_path, &destination)?;
+    
+    Ok(destination.to_string_lossy().to_string())
+}
+
+// Command to set the theme
+#[tauri::command]
+fn set_theme(app_handle: AppHandle, theme: String) -> Result<(), Error> {
+    // Save theme preference
+    // In a real app, you might want to save this to a config file
+    
+    // Emit theme changed event
+    app_handle.emit("theme-changed", theme).unwrap();
+    
+    Ok(())
+}
+
+// Main entry point
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_deep_link::init())
+        .setup(|app| {
+            // Initialize app state
+            let app_state = init_app_state().map_err(|e| anyhow!(format!("Failed to initialize app state: {}", e)))?;
+            app.manage(Arc::new(Mutex::new(app_state)));
+            
+            // Register deep links for development
+            #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                app.deep_link().register_all()?;
+            }
+            
+            // Get the main window
+            let window = app.get_webview_window("main").unwrap();
+            
+            // Set window decorations
+            window.set_decorations(false).unwrap();
+            
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            download_file,
+            get_current_file,
+            get_file_by_id,
+            copy_to_clipboard,
+            save_file,
+            handle_save_dialog_result,
+            set_theme,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
