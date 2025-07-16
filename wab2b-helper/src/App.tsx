@@ -9,6 +9,9 @@ import ActionButtons from "./components/ActionButtons";
 import ThemeToggle from "./components/ThemeToggle";
 import ProgressBar from "./components/ProgressBar";
 import packageJson from "../package.json";
+import { save } from '@tauri-apps/plugin-dialog';
+import { readFile } from '@tauri-apps/plugin-fs';
+import { openPath } from '@tauri-apps/plugin-opener';
 
 // Types
 interface FileInfo {
@@ -19,6 +22,8 @@ interface FileInfo {
   mime_type: string;
   size: number;
 }
+
+export const isTauri = !!(window as any).__TAURI__;
 
 function App() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -32,6 +37,8 @@ function App() {
   const spinnerRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
+  // Add toast state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Initialize theme based on system preference
   useEffect(() => {
@@ -163,30 +170,39 @@ function App() {
     }
   }, [progress]);
 
-  // Listen for deep link events
+  // Add effect for toast auto-dismiss
   useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // Wrap all Tauri-dependent useEffects with isTauri check
+  useEffect(() => {
+    if (!isTauri) return;
     const unlisten = listen<string>("deep-link-received", (event) => {
       handleDeepLink(event.payload);
     });
 
     return () => {
-      unlisten.then(unlistenFn => unlistenFn());
+      void unlisten.then(unlistenFn => unlistenFn()).catch(console.error);
     };
   }, []);
 
-  // Listen for download progress
   useEffect(() => {
+    if (!isTauri) return;
     const unlisten = listen<number>("download-progress", (event) => {
       setProgress(event.payload);
     });
 
     return () => {
-      unlisten.then(unlistenFn => unlistenFn());
+      void unlisten.then(unlistenFn => unlistenFn()).catch(console.error);
     };
   }, []);
 
-  // Listen for theme changes
   useEffect(() => {
+    if (!isTauri) return;
     const unlisten = listen<string>("theme-changed", (event) => {
       const newTheme = event.payload as "light" | "dark";
       setTheme(newTheme);
@@ -194,19 +210,68 @@ function App() {
     });
 
     return () => {
-      unlisten.then(unlistenFn => unlistenFn());
+      void unlisten.then(unlistenFn => unlistenFn()).catch(console.error);
     };
+  }, []);
+
+  // Add listener for copy-to-clipboard event
+  useEffect(() => {
+    if (!isTauri) return;
+    const unlisten = listen<FileInfo>("copy-to-clipboard", async (event) => {
+      try {
+        const fileInfo = event.payload;
+        const buffer = await readFile(fileInfo.file_path);
+        const blob = new Blob([buffer], { type: fileInfo.mime_type });
+        await navigator.clipboard.write([
+          new ClipboardItem({ [fileInfo.mime_type]: blob })
+        ]);
+        setToast({ message: 'File copied to clipboard!', type: 'success' });
+      } catch (err) {
+        console.error('Clipboard copy failed:', err);
+        setToast({ message: 'Failed to copy file to clipboard', type: 'error' });
+      }
+    });
+
+    return () => void unlisten.then(f => f()).catch(console.error);
+  }, []);
+
+  // Add listener for save-file-dialog event
+  useEffect(() => {
+    if (!isTauri) return;
+    const unlisten = listen<FileInfo>("save-file-dialog", async (event) => {
+      try {
+        const fileInfo = event.payload;
+        const savePath = await save({
+          defaultPath: fileInfo.file_name,
+          filters: [{ name: fileInfo.mime_type, extensions: [fileInfo.file_name.split('.').pop() || ''] }],
+        });
+        if (savePath) {
+          await invoke('handle_save_dialog_result', { id: fileInfo.id, savePath });
+          setToast({ message: 'File saved successfully!', type: 'success' });
+        }
+      } catch (err) {
+        setToast({ message: 'Failed to save file', type: 'error' });
+      }
+    });
+
+    return () => void unlisten.then(f => f()).catch(console.error);
   }, []);
 
   // Handle deep link
   const handleDeepLink = async (url: string) => {
+    if (!isTauri) {
+      setError('Tauri not available in web mode');
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
       setProgress(0);
       
+      const actualUrl = url.replace(/^wab2b-helper:\/*/i, '');
+      
       // Download the file
-      const fileInfo = await invoke<FileInfo>("download_file", { url });
+      const fileInfo = await invoke<FileInfo>("download_file", { url: actualUrl });
       setFile(fileInfo);
     } catch (err) {
       console.error("Error handling deep link:", err);
@@ -227,12 +292,14 @@ function App() {
       scopeRef.current.methods.themeChange(newTheme === "dark");
     }
     
-    await invoke("set_theme", { theme: newTheme });
+    if (isTauri) {
+      await invoke("set_theme", { theme: newTheme });
+    }
   };
 
   // Copy file to clipboard
   const handleCopy = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (!file) return;
+    if (!isTauri || !file) return;
     
     try {
       await invoke("copy_to_clipboard", { id: file.id });
@@ -249,7 +316,7 @@ function App() {
 
   // Save and download file
   const handleSaveDownload = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (!file) return;
+    if (!isTauri || !file) return;
     
     try {
       await invoke("save_file", { id: file.id });
@@ -266,13 +333,21 @@ function App() {
 
   // Preview file
   const handlePreview = async () => {
-    if (!file) return;
-    
+    if (!isTauri || !file) return;
+    // Skip external open for previewable media types (images, video, audio, PDF)
+    if (
+      file.mime_type.startsWith('video/') ||
+      file.mime_type.startsWith('image/') ||
+      file.mime_type.startsWith('audio/') ||
+      file.mime_type === 'application/pdf'
+    ) {
+      return;
+    }
     try {
-      // Use the Tauri plugin opener to open the file
-      await invoke("plugin:opener|open", { path: file.file_path });
+      // Use the JS API for opener for other files
+      await openPath(file.file_path);
     } catch (err) {
-      console.error("Error previewing file:", err);
+      console.error('Error previewing file:', err);
       setError(`Failed to preview file: ${err}`);
     }
   };
@@ -335,6 +410,11 @@ function App() {
           {error && (
             <div className="error-message mt-4 p-4 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800">
               {error}
+            </div>
+          )}
+          {toast && (
+            <div className={`fixed bottom-4 right-4 px-4 py-2 rounded-lg ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white`}>
+              {toast.message}
             </div>
           )}
         </div>

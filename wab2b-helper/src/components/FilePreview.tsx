@@ -1,4 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import ReactPlayer from 'react-player';
+import { readFile } from '@tauri-apps/plugin-fs';
+import { tempDir, BaseDirectory } from '@tauri-apps/api/path';
 
 interface FileInfo {
   id: string;
@@ -19,6 +22,36 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onPreview }) => {
   const isVideo = file.mime_type.startsWith('video/');
   const isAudio = file.mime_type.startsWith('audio/');
   const isPdf = file.mime_type === 'application/pdf';
+  
+  // State for video preview blob URL
+  const [videoSrc, setVideoSrc] = useState<string | null>(null);
+
+  // Load video file as blob URL
+  useEffect(() => {
+    if (!isVideo) return;
+    const loadVideo = async () => {
+      try {
+        // Get OS temp directory path
+        const tempPath = await tempDir();
+        // Determine file path relative to temp directory
+        let relativePath = file.file_path;
+        if (relativePath.startsWith(tempPath)) {
+          relativePath = relativePath.substring(tempPath.length);
+          if (relativePath.startsWith('/') || relativePath.startsWith('\\')) {
+            relativePath = relativePath.slice(1);
+          }
+        }
+        // Read file from temp directory
+        const data = await readFile(relativePath, { baseDir: BaseDirectory.Temp });
+        const blob = new Blob([new Uint8Array(data)], { type: file.mime_type });
+        const url = URL.createObjectURL(blob);
+        setVideoSrc(url);
+      } catch (err) {
+        console.error('Failed to load video preview', err);
+      }
+    };
+    loadVideo();
+  }, [file.file_path, file.mime_type, isVideo]);
   
   // Format file size
   const formatFileSize = (bytes: number): string => {
@@ -45,12 +78,22 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onPreview }) => {
     }
     
     if (isVideo) {
-      return (
-        <video 
-          src={`asset://${file.file_path}`}
-          controls
-          className="max-w-full max-h-[300px] rounded-lg shadow-lg"
-        />
+      return videoSrc ? (
+        <div
+          className="relative w-full max-w-2xl rounded-lg shadow-lg cursor-pointer overflow-hidden"
+          style={{ paddingTop: '50%' }}
+          onClick={onPreview}
+        >
+          <ReactPlayer
+            src={videoSrc}
+            controls
+            width="100%"
+            height="100%"
+            style={{ position: 'absolute', top: 0, left: 0 }}
+          />
+        </div>
+      ) : (
+        <p>Loading video preview...</p>
       );
     }
     

@@ -12,7 +12,12 @@ use futures_util::StreamExt;
 use std::fs;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri_plugin_single_instance as single_instance;
 use mime_guess::from_path;
+use std::env;
+use tauri_plugin_clipboard_manager;
+use tauri_plugin_dialog;
+use tauri_plugin_fs;
 
 // Global state to store downloaded files
 struct AppState {
@@ -271,8 +276,27 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(Arc::new(Mutex::new(state)))
+        // ensure only one app instance; forward protocol URL to existing window
+        .plugin(single_instance::init(|app, argv, _| {
+            if let Some(link) = argv.get(1) {
+                app.emit("deep-link-received", link).unwrap();
+            }
+        }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .setup(|app| {
+            #[cfg(desktop)]
+            {
+                let args: Vec<String> = env::args().collect();
+                if args.len() > 1 {
+                    app.emit("deep-link-received", &args[1]).unwrap();
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             download_file,
             get_current_file,
