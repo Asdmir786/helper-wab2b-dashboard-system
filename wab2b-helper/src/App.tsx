@@ -10,8 +10,8 @@ import ThemeToggle from "./components/ThemeToggle";
 import ProgressBar from "./components/ProgressBar";
 import packageJson from "../package.json";
 import { save } from '@tauri-apps/plugin-dialog';
-import { readFile } from '@tauri-apps/plugin-fs';
 import { openPath } from '@tauri-apps/plugin-opener';
+// (removed plugin-clipboard-manager import)
 
 // Types
 interface FileInfo {
@@ -214,26 +214,7 @@ function App() {
     };
   }, []);
 
-  // Add listener for copy-to-clipboard event
-  useEffect(() => {
-    if (!isTauri) return;
-    const unlisten = listen<FileInfo>("copy-to-clipboard", async (event) => {
-      try {
-        const fileInfo = event.payload;
-        const buffer = await readFile(fileInfo.file_path);
-        const blob = new Blob([buffer], { type: fileInfo.mime_type });
-        await navigator.clipboard.write([
-          new ClipboardItem({ [fileInfo.mime_type]: blob })
-        ]);
-        setToast({ message: 'File copied to clipboard!', type: 'success' });
-      } catch (err) {
-        console.error('Clipboard copy failed:', err);
-        setToast({ message: 'Failed to copy file to clipboard', type: 'error' });
-      }
-    });
-
-    return () => void unlisten.then(f => f()).catch(console.error);
-  }, []);
+  // Native copy via Windows CF_HDROP; JS listeners removed
 
   // Add listener for save-file-dialog event
   useEffect(() => {
@@ -300,17 +281,15 @@ function App() {
   // Copy file to clipboard
   const handleCopy = async (e: React.MouseEvent<HTMLButtonElement>) => {
     if (!isTauri || !file) return;
-    
     try {
-      await invoke("copy_to_clipboard", { id: file.id });
-      
-      // Add a visual feedback animation
+      await invoke("copy_file_native", { path: file.file_path });
       if (scopeRef.current?.methods) {
         scopeRef.current.methods.buttonFeedback(e.currentTarget);
       }
+      setToast({ message: 'Copied file to native clipboard!', type: 'success' });
     } catch (err) {
-      console.error("Error copying to clipboard:", err);
-      setError(`Failed to copy file: ${err}`);
+      console.error("Error copying file natively:", err);
+      setToast({ message: 'Failed to copy file natively', type: 'error' });
     }
   };
 

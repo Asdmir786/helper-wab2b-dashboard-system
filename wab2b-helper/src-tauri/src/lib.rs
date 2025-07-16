@@ -15,9 +15,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri_plugin_single_instance as single_instance;
 use mime_guess::from_path;
 use std::env;
-use tauri_plugin_clipboard_manager;
 use tauri_plugin_dialog;
 use tauri_plugin_fs;
+use clipboard_win::{formats, set_clipboard};
+use std::path::Path;
 
 // Global state to store downloaded files
 struct AppState {
@@ -185,27 +186,6 @@ fn get_file_by_id(app_handle: AppHandle, id: String) -> Result<FileInfo, Error> 
         .ok_or_else(|| Error::FileNotFound(id))
 }
 
-// Command to copy file to clipboard
-#[tauri::command]
-async fn copy_to_clipboard(app_handle: AppHandle, id: String) -> Result<bool, Error> {
-    let state = app_handle.state::<Arc<Mutex<AppState>>>();
-    
-    // Get the file info - avoid MutexGuard across await points
-    let file_info = {
-        let app_state = state.lock().unwrap();
-        app_state.downloaded_files
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| Error::FileNotFound(id.clone()))?
-    };
-    
-    // Emit event to let frontend handle the clipboard operation
-    // since Tauri doesn't have direct clipboard file support
-    app_handle.emit("copy-to-clipboard", &file_info).unwrap();
-    
-    Ok(true)
-}
-
 // Command to save file to a specific location
 #[tauri::command]
 async fn save_file(
@@ -263,6 +243,23 @@ async fn handle_save_dialog_result(
     Ok(save_path)
 }
 
+
+#[tauri::command]
+fn copy_file_native(path: String) -> Result<(), String> {
+    // 1. Verify the file exists
+    if !Path::new(&path).exists() {
+        return Err("File not found".into());
+    }
+    // 2. Open the Windows clipboard (with retries)
+    let _clip = Clipboard::new_attempts(10).map_err(|e| e.to_string())?; :contentReference[oaicite:0]{index=0}
+    // 3. Prepare a Vec<String> and pass its slice ( &[String] )
+    let files = vec![path.clone()];
+    // 4. Write that slice into CF_HDROP via FileList::write_clipboard
+    formats::FileList.write_clipboard(&files[..]).map_err(|e| e.to_string())?; :contentReference[oaicite:1]{index=1}
+    // Clipboard is closed when `_clip` is dropped
+    Ok(())
+}
+
 #[tauri::command]
 fn set_theme(app_handle: AppHandle, theme: String) -> Result<(), Error> {
   let window = app_handle.get_webview_window("main").unwrap();
@@ -284,7 +281,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
+        // removed plugin-clipboard-manager; using native clipboard instead
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
@@ -301,7 +298,7 @@ pub fn run() {
             download_file,
             get_current_file,
             get_file_by_id,
-            copy_to_clipboard,
+            copy_file_native,
             save_file,
             handle_save_dialog_result,
             set_theme

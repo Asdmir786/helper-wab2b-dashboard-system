@@ -16,7 +16,6 @@
         { "path": "*" }
       ]
     },
-    "clipboard-manager:allow-write-text",
     "dialog:allow-save",
     "fs:allow-exists",
     "fs:allow-read-file",
