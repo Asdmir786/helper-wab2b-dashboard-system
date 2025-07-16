@@ -1,8 +1,9 @@
 {
   "name": "wab2b-helper",
   "private": true,
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-beta",
   "type": "module",
+  "packageManager": "pnpm@10.13.1",
   "scripts": {
     "dev": "vite",
     "tauri:dev": "tauri dev",
@@ -19,8 +20,8 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.11",
-    "@tauri-apps/cli": "^2",
     "@types/react": "^18.3.1",
+    "@tauri-apps/cli": "^2",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "latest",
