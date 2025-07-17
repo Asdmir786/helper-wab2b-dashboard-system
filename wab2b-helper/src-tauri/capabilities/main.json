@@ -21,6 +21,17 @@
     "fs:allow-read-file",
     "fs:allow-temp-read",
     "fs:allow-temp-read-recursive",
-    "fs:read-all"
+    "fs:read-all",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "fct",
+          "cmd": "fct",
+          "args": ["--file", { "validator": ".*" }, "--copy"],
+          "sidecar": true
+        }
+      ]
+    }
   ]
 } 

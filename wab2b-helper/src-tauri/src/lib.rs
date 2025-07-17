@@ -17,8 +17,7 @@ use mime_guess::from_path;
 use std::env;
 use tauri_plugin_dialog;
 use tauri_plugin_fs;
-use clipboard_win::{formats, set_clipboard};
-use std::path::Path;
+use tauri_plugin_shell::ShellExt;
 
 // Global state to store downloaded files
 struct AppState {
@@ -243,20 +242,22 @@ async fn handle_save_dialog_result(
     Ok(save_path)
 }
 
+#[tauri::command(async)]
+async fn copy_file_to_clipboard(app: AppHandle, path: String) -> Result<(), String> {
+    let shell = app.shell();
+    let output = shell
+        .sidecar("fct")
+        .map_err(|e| e.to_string())?
+        .args(["--file", &path, "--copy"])
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
 
-#[tauri::command]
-fn copy_file_native(path: String) -> Result<(), String> {
-    // 1. Verify the file exists
-    if !Path::new(&path).exists() {
-        return Err("File not found".into());
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        return Err(format!("fct.exe failed: {}", stderr));
     }
-    // 2. Open the Windows clipboard (with retries)
-    let _clip = Clipboard::new_attempts(10).map_err(|e| e.to_string())?; :contentReference[oaicite:0]{index=0}
-    // 3. Prepare a Vec<String> and pass its slice ( &[String] )
-    let files = vec![path.clone()];
-    // 4. Write that slice into CF_HDROP via FileList::write_clipboard
-    formats::FileList.write_clipboard(&files[..]).map_err(|e| e.to_string())?; :contentReference[oaicite:1]{index=1}
-    // Clipboard is closed when `_clip` is dropped
+
     Ok(())
 }
 
@@ -284,6 +285,7 @@ pub fn run() {
         // removed plugin-clipboard-manager; using native clipboard instead
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             #[cfg(desktop)]
             {
@@ -298,7 +300,7 @@ pub fn run() {
             download_file,
             get_current_file,
             get_file_by_id,
-            copy_file_native,
+            copy_file_to_clipboard,
             save_file,
             handle_save_dialog_result,
             set_theme

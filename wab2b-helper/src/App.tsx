@@ -282,7 +282,7 @@ function App() {
   const handleCopy = async (e: React.MouseEvent<HTMLButtonElement>) => {
     if (!isTauri || !file) return;
     try {
-      await invoke("copy_file_native", { path: file.file_path });
+      await invoke("copy_file_to_clipboard", { path: file.file_path });
       if (scopeRef.current?.methods) {
         scopeRef.current.methods.buttonFeedback(e.currentTarget);
       }
