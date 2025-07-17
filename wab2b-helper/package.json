@@ -1,7 +1,7 @@
 {
   "name": "wab2b-helper",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.0-release",
   "type": "module",
   "packageManager": "pnpm@10.13.1",
   "scripts": {

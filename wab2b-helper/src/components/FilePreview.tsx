@@ -110,7 +110,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onPreview }) => {
     if (isPdf) {
       return (
         <div 
-          className="w-full h-[300px] bg-gray-100 dark:bg-gray-800 rounded-lg shadow-lg flex items-center justify-center cursor-pointer"
+          className="w-full h-[300px] bg-gray-100 dark:bg-gray-800 rounded-lg shadow-lg flex items-center justify-center cursor-pointer file-preview-bg transition-colors duration-200"
           onClick={onPreview}
         >
           <div className="flex flex-col items-center">
@@ -130,7 +130,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onPreview }) => {
     // Generic file preview
     return (
       <div 
-        className="w-full h-[200px] bg-gray-100 dark:bg-gray-800 rounded-lg shadow-lg flex items-center justify-center cursor-pointer"
+        className="w-full h-[200px] bg-gray-100 dark:bg-gray-800 rounded-lg shadow-lg flex items-center justify-center cursor-pointer file-preview-bg transition-colors duration-200"
         onClick={onPreview}
       >
         <div className="flex flex-col items-center">
@@ -145,10 +145,10 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onPreview }) => {
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full file-preview">
       <div className="mb-4">
-        <h2 className="text-xl font-semibold truncate">{file.file_name}</h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
+        <h2 className="text-xl font-semibold truncate transition-colors duration-200">{file.file_name}</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400 transition-colors duration-200">
           {file.mime_type} • {formatFileSize(file.size)}
         </p>
       </div>

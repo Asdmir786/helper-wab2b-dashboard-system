@@ -113,8 +113,8 @@ function App() {
         const copyButtons = document.querySelectorAll('.action-button-copy');
         if (copyButtons.length > 0) {
           animate(copyButtons, {
-            backgroundColor: isDark ? 'rgb(55, 65, 81)' : 'rgb(248, 250, 252)',
-            color: isDark ? 'rgb(249, 250, 251)' : 'rgb(51, 65, 85)',
+            backgroundColor: isDark ? 'rgb(31, 41, 55)' : 'rgb(255, 255, 255)',
+            color: isDark ? 'rgb(243, 244, 246)' : 'rgb(31, 41, 55)',
             easing: 'easeInOutQuad',
             duration: 300
           });
@@ -123,8 +123,28 @@ function App() {
         const saveButtons = document.querySelectorAll('.action-button-save');
         if (saveButtons.length > 0) {
           animate(saveButtons, {
-            backgroundColor: isDark ? 'rgb(96, 165, 250)' : 'rgb(59, 130, 246)',
+            backgroundColor: isDark ? 'rgb(96, 165, 250)' : 'rgb(37, 99, 235)',
             color: '#ffffff',
+            easing: 'easeInOutQuad',
+            duration: 300
+          });
+        }
+        
+        // Animate file info text
+        const fileInfo = document.querySelectorAll('.file-preview h2, .file-preview p');
+        if (fileInfo.length > 0) {
+          animate(fileInfo, {
+            color: isDark ? 'rgb(243, 244, 246)' : 'rgb(31, 41, 55)',
+            easing: 'easeInOutQuad',
+            duration: 300
+          });
+        }
+        
+        // Animate generic file preview backgrounds
+        const filePreviewBgs = document.querySelectorAll('.file-preview-bg');
+        if (filePreviewBgs.length > 0) {
+          animate(filePreviewBgs, {
+            backgroundColor: isDark ? 'rgb(31, 41, 55)' : 'rgb(243, 244, 246)',
             easing: 'easeInOutQuad',
             duration: 300
           });
@@ -364,22 +384,34 @@ function App() {
             </div>
           ) : file ? (
             <div className="w-full max-w-2xl flex flex-col items-center space-y-6" ref={fileContentRef}>
-              <FilePreview file={file} onPreview={handlePreview} />
+              <div className="relative w-full">
+                <button
+                  onClick={() => setFile(null)}
+                  className="absolute top-0 right-0 p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 z-10"
+                  aria-label="Close preview"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+                <FilePreview file={file} onPreview={handlePreview} />
+              </div>
               <ActionButtons onCopy={handleCopy} onSaveDownload={handleSaveDownload} />
             </div>
           ) : (
             <div className="text-center">
-              <div className="waiting-container p-8 rounded-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-4 text-blue-500">
+              <div className="waiting-container p-8 rounded-lg transition-colors duration-200 file-preview-bg">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-4 text-blue-500 dark:text-blue-400">
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="12" y1="8" x2="12" y2="16"></line>
                   <line x1="8" y1="12" x2="16" y2="12"></line>
                 </svg>
-                <h3 className="text-lg font-medium mb-2">Waiting for content...</h3>
-                <p className="font-sans font-medium text-gray-900 dark:text-gray-400 mb-4">
-                  This app handles <code className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 px-2 py-1 rounded font-mono text-sm">wab2b-helper:</code> protocol links.
+                <h3 className="text-lg font-medium mb-2 transition-colors duration-200">Waiting for content...</h3>
+                <p className="font-sans font-medium text-gray-900 dark:text-gray-400 mb-4 transition-colors duration-200">
+                  This app handles <code className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 px-2 py-1 rounded font-mono text-sm transition-colors duration-200">wab2b-helper:</code> protocol links, from dashboard.wab2b.com.
                 </p>
-                <div className="font-mono text-sm text-gray-900 dark:text-gray-400 mt-3">
+                <div className="font-mono text-sm text-gray-900 dark:text-gray-400 mt-3 transition-colors duration-200">
                   No user input needed - just wait for browser protocol events
                 </div>
               </div>
