@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import ReactPlayer from 'react-player';
+import React, { useState, useEffect, Suspense } from 'react';
+const ReactPlayer = React.lazy(() => import('react-player'));
 import { readFile } from '@tauri-apps/plugin-fs';
 import { tempDir, BaseDirectory } from '@tauri-apps/api/path';
 
@@ -84,13 +84,15 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onPreview }) => {
           style={{ paddingTop: '50%' }}
           onClick={onPreview}
         >
-          <ReactPlayer
-            src={videoSrc}
-            controls
-            width="100%"
-            height="100%"
-            style={{ position: 'absolute', top: 0, left: 0 }}
-          />
+          <Suspense fallback={<p>Loading video player...</p>}>
+            <ReactPlayer
+              src={videoSrc}
+              controls
+              width="100%"
+              height="100%"
+              style={{ position: 'absolute', top: 0, left: 0 }}
+            />
+          </Suspense>
         </div>
       ) : (
         <p>Loading video preview...</p>
@@ -160,4 +162,4 @@ const FilePreview: React.FC<FilePreviewProps> = ({ file, onPreview }) => {
   );
 };
 
-export default FilePreview; 
+export default FilePreview;

@@ -1,13 +1,16 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { animate, createScope } from 'animejs';
 import { useEffect, useRef } from 'react';
+import { UpdateButton } from './UpdateButton';
+import { UpdateManager } from '../updater';
 
 interface TitleBarProps {
 	version: string;
 	isDarkMode: boolean;
+	updateManager?: UpdateManager;
 }
 
-const TitleBar: React.FC<TitleBarProps> = ({ version, isDarkMode }) => {
+const TitleBar: React.FC<TitleBarProps> = ({ version, isDarkMode, updateManager }) => {
 	const buttonsRef = useRef<HTMLDivElement>(null);
 	const scope = createScope();
 	const appNameRef = useRef<HTMLSpanElement>(null);
@@ -80,6 +83,12 @@ const TitleBar: React.FC<TitleBarProps> = ({ version, isDarkMode }) => {
 						v{version}
 					</span>
 				</div>
+				{/* Add update button if updateManager is provided */}
+				{updateManager && (
+					<div className="ml-4">
+						<UpdateButton updateManager={updateManager} />
+					</div>
+				)}
 			</div>
 			<div className="flex" ref={buttonsRef}>
 				<button

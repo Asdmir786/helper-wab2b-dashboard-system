@@ -1,24 +1,29 @@
 {
   "name": "wab2b-helper",
   "private": true,
-  "version": "0.1.0-release",
+  "version": "0.2.0-beta",
   "type": "module",
   "packageManager": "pnpm@10.13.1",
   "scripts": {
     "dev": "vite",
     "tauri:dev": "tauri dev",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && tauri build && node scripts/generate-checksums.js",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.3.0",
     "@tauri-apps/plugin-fs": "^2.4.0",
     "@tauri-apps/plugin-opener": "^2",
+    "@types/node": "^24.0.15",
     "animejs": "^4.0.2",
+    "dashjs": "^5.0.3",
+    "hls.js": "^1.6.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
     "react-player": "^3.3.0"
   },
   "devDependencies": {

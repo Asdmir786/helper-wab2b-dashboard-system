@@ -36,4 +36,6 @@ tauri-plugin-single-instance = "2.3.0"
 tauri-plugin-fs = "2.4.0"
 tauri-plugin-dialog = "2.3.0"
 tauri-plugin-shell = "2.3.0"
+regex = "1.11.1"
+sha2 = "0.10.8"
 

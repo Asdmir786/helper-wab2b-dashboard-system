@@ -3,14 +3,15 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { animate, createScope } from "animejs";
 import "./App.css";
-import TitleBar from "./components/TitleBar";
-import FilePreview from "./components/FilePreview";
-import ActionButtons from "./components/ActionButtons";
-import ThemeToggle from "./components/ThemeToggle";
-import ProgressBar from "./components/ProgressBar";
+import React, {Suspense} from "react";
+const TitleBar = React.lazy(() => import("./components/TitleBar"));
+const FilePreview = React.lazy(() => import("./components/FilePreview"));
+const ActionButtons = React.lazy(() => import("./components/ActionButtons"));
+const ThemeToggle = React.lazy(() => import("./components/ThemeToggle"));
+const ProgressBar = React.lazy(() => import("./components/ProgressBar"));
 import packageJson from "../package.json";
-import { save } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
+import { UpdateManager, UpdateNotificationModal } from './updater';
 // (removed plugin-clipboard-manager import)
 
 // Types
@@ -39,6 +40,43 @@ function App() {
   const progressBarRef = useRef<HTMLDivElement>(null);
   // Add toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  // Initialize update manager
+  const [updateManager] = useState<UpdateManager>(() => new UpdateManager({
+    githubOwner: 'Asdmir786',
+    githubRepo: 'helper-wab2b-dashboard-system'
+  }));
+
+  // Track update state
+  const [updateState, setUpdateState] = useState(updateManager.getUpdateState());
+
+  // Listen for update state changes
+  useEffect(() => {
+    if (!isTauri) return;
+
+    const unsubscribe = updateManager.onStateChange((state) => {
+      setUpdateState(state);
+
+      // Show toast notifications for update events
+      if (state.status === 'available') {
+        setToast({
+          message: `Update available: v${state.latestVersion}`,
+          type: 'success'
+        });
+      } else if (state.status === 'error') {
+        setToast({
+          message: `Update error: ${state.error}`,
+          type: 'error'
+        });
+      }
+    });
+
+    // Check for updates on app start
+    if (updateManager.getUpdateState().status === 'idle') {
+      updateManager.checkForUpdates(false).catch(console.error);
+    }
+
+    return unsubscribe;
+  }, [updateManager]);
 
   // Initialize theme based on system preference
   useEffect(() => {
@@ -83,7 +121,7 @@ function App() {
           easing: 'easeInOutQuad'
         });
       });
-      
+
       self.add('updateProgress', (value: number) => {
         if (!progressBarRef.current) return;
         const progressEl = progressBarRef.current.querySelector('div');
@@ -98,17 +136,17 @@ function App() {
 
       self.add('themeChange', (isDark: boolean) => {
         if (!mainRef.current) return;
-        
+
         const targetBgColor = isDark ? 'rgb(18, 18, 18)' : 'rgb(248, 250, 252)';
         const targetTextColor = isDark ? 'rgb(241, 245, 249)' : 'rgb(17, 24, 39)';
-        
+
         animate(mainRef.current, {
           backgroundColor: targetBgColor,
           color: targetTextColor,
           easing: 'easeInOutQuad',
           duration: 300
         });
-        
+
         // Also animate any other elements that need theme transition
         const copyButtons = document.querySelectorAll('.action-button-copy');
         if (copyButtons.length > 0) {
@@ -119,7 +157,7 @@ function App() {
             duration: 300
           });
         }
-        
+
         const saveButtons = document.querySelectorAll('.action-button-save');
         if (saveButtons.length > 0) {
           animate(saveButtons, {
@@ -129,7 +167,7 @@ function App() {
             duration: 300
           });
         }
-        
+
         // Animate file info text
         const fileInfo = document.querySelectorAll('.file-preview h2, .file-preview p');
         if (fileInfo.length > 0) {
@@ -139,7 +177,7 @@ function App() {
             duration: 300
           });
         }
-        
+
         // Animate generic file preview backgrounds
         const filePreviewBgs = document.querySelectorAll('.file-preview-bg');
         if (filePreviewBgs.length > 0) {
@@ -150,7 +188,7 @@ function App() {
           });
         }
       });
-      
+
       self.add('showError', (errorElement: HTMLElement) => {
         animate(errorElement, {
           opacity: [0, 1],
@@ -234,29 +272,7 @@ function App() {
     };
   }, []);
 
-  // Native copy via Windows CF_HDROP; JS listeners removed
-
-  // Add listener for save-file-dialog event
-  useEffect(() => {
-    if (!isTauri) return;
-    const unlisten = listen<FileInfo>("save-file-dialog", async (event) => {
-      try {
-        const fileInfo = event.payload;
-        const savePath = await save({
-          defaultPath: fileInfo.file_name,
-          filters: [{ name: fileInfo.mime_type, extensions: [fileInfo.file_name.split('.').pop() || ''] }],
-        });
-        if (savePath) {
-          await invoke('handle_save_dialog_result', { id: fileInfo.id, savePath });
-          setToast({ message: 'File saved successfully!', type: 'success' });
-        }
-      } catch (err) {
-        setToast({ message: 'Failed to save file', type: 'error' });
-      }
-    });
-
-    return () => void unlisten.then(f => f()).catch(console.error);
-  }, []);
+  // (save-file-dialog listener removed – save dialog now handled natively in Rust)
 
   // Handle deep link
   const handleDeepLink = async (url: string) => {
@@ -268,9 +284,9 @@ function App() {
       setLoading(true);
       setError(null);
       setProgress(0);
-      
+
       const actualUrl = url.replace(/^wab2b-helper:\/*/i, '');
-      
+
       // Download the file
       const fileInfo = await invoke<FileInfo>("download_file", { url: actualUrl });
       setFile(fileInfo);
@@ -287,12 +303,12 @@ function App() {
     const newTheme = theme === "light" ? "dark" : "light";
     setTheme(newTheme);
     document.documentElement.classList.toggle("dark", newTheme === "dark");
-    
+
     // Animate theme change
     if (scopeRef.current?.methods) {
       scopeRef.current.methods.themeChange(newTheme === "dark");
     }
-    
+
     if (isTauri) {
       await invoke("set_theme", { theme: newTheme });
     }
@@ -316,10 +332,10 @@ function App() {
   // Save and download file
   const handleSaveDownload = async (e: React.MouseEvent<HTMLButtonElement>) => {
     if (!isTauri || !file) return;
-    
+
     try {
       await invoke("save_file", { id: file.id });
-      
+
       // Add a visual feedback animation
       if (scopeRef.current?.methods) {
         scopeRef.current.methods.buttonFeedback(e.currentTarget);
@@ -364,22 +380,79 @@ function App() {
     }
   }, [error]);
 
+  // Handle update installation
+  const handleInstallUpdate = async () => {
+    if (updateState.status !== 'available') return;
+
+    try {
+      setToast({ message: 'Downloading update...', type: 'success' });
+      await updateManager.downloadUpdate();
+
+      // The update installation will be handled by the updateManager
+      // which will restart the app after installation
+    } catch (error) {
+      console.error('Error installing update:', error);
+      setToast({
+        message: `Update installation failed: ${error instanceof Error ? error.message : String(error)}`,
+        type: 'error'
+      });
+    }
+  };
+
+  // Dismiss update notification
+  const handleDismissUpdate = () => {
+    // Just hide the modal, don't change the update state
+    setShowUpdateModal(false);
+  };
+
+  // State to control the visibility of the update modal
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+
+  // Show update modal when an update is available
+  useEffect(() => {
+    if (updateState.status === 'available') {
+      setShowUpdateModal(true);
+    }
+  }, [updateState.status]);
+
+  // Loading fallback component for Suspense
+  const LoadingFallback = () => (
+    <div className="flex items-center justify-center h-full w-full">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+    </div>
+  );
+
   return (
     <div className={`flex flex-col h-full w-full ${theme === "dark" ? "dark" : ""}`} ref={rootRef}>
-      <TitleBar version={packageJson.version} isDarkMode={theme === 'dark'} />
-      
-      <main ref={mainRef} className="flex-1 flex flex-col p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <Suspense fallback={<LoadingFallback />}>
+        <TitleBar version={packageJson.version} isDarkMode={theme === 'dark'} updateManager={updateManager} />
+
+        {/* Update notification modal */}
+        {showUpdateModal && updateState.status === 'available' && (
+          <UpdateNotificationModal
+            updateState={updateState}
+            onInstall={handleInstallUpdate}
+            onLater={handleDismissUpdate}
+            onClose={handleDismissUpdate}
+          />
+        )}
+
+        <main ref={mainRef} className="flex-1 flex flex-col p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
         <div className="absolute top-10 right-4">
-          <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+          <Suspense fallback={<LoadingFallback />}>
+            <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+          </Suspense>
         </div>
-        
+
         <div className="flex-1 flex flex-col items-center justify-center">
           {loading ? (
             <div className="flex flex-col items-center justify-center space-y-4">
               <div className="spinner" ref={spinnerRef}></div>
               <p className="text-gray-800 dark:text-gray-300 font-medium">Downloading file...</p>
               <div ref={progressBarRef}>
-                <ProgressBar progress={progress} />
+                <Suspense fallback={<LoadingFallback />}>
+                  <ProgressBar progress={progress} />
+                </Suspense>
               </div>
             </div>
           ) : file ? (
@@ -395,9 +468,13 @@ function App() {
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
                 </button>
-                <FilePreview file={file} onPreview={handlePreview} />
+                <Suspense fallback={<LoadingFallback />}>
+                  <FilePreview file={file} onPreview={handlePreview} />
+                </Suspense>
               </div>
-              <ActionButtons onCopy={handleCopy} onSaveDownload={handleSaveDownload} />
+              <Suspense fallback={<LoadingFallback />}>
+                <ActionButtons onCopy={handleCopy} onSaveDownload={handleSaveDownload} />
+              </Suspense>
             </div>
           ) : (
             <div className="text-center">
@@ -417,7 +494,7 @@ function App() {
               </div>
             </div>
           )}
-          
+
           {error && (
             <div className="error-message mt-4 p-4 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800">
               {error}
@@ -430,6 +507,7 @@ function App() {
           )}
         </div>
       </main>
+      </Suspense>
     </div>
   );
 }

@@ -18,6 +18,10 @@ use std::env;
 use tauri_plugin_dialog;
 use tauri_plugin_fs;
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_dialog::DialogExt;
+
+// Import the updater module
+pub mod updater;
 
 // Global state to store downloaded files
 struct AppState {
@@ -203,16 +207,25 @@ async fn save_file(
             .ok_or_else(|| Error::FileNotFound(id.clone()))?
     };
     
-    // If save_path is provided, save to that location
-    // Otherwise, prompt the user for a location
+    // 1️⃣ If the path was supplied we're done.  
+    // 2️⃣ Otherwise open a blocking save dialog natively and keep going.
     let destination = if let Some(path) = save_path {
         PathBuf::from(path)
     } else {
-        // Emit event to let frontend handle the save dialog
-        app_handle.emit("save-file-dialog", &file_info).unwrap();
-        
-        // This is a placeholder, the actual path will be provided by the frontend
-        return Ok("pending".to_string());
+        let file_path_result = app_handle
+            .dialog()
+            .file()
+            .add_filter("Any", &["*"])
+            .set_file_name(&file_info.file_name)
+            .blocking_save_file();
+            
+        match file_path_result {
+            Some(file_path) => PathBuf::from(file_path.to_string()),
+            None => return Err(Error::IoError(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Save cancelled by user",
+            ))),
+        }
     };
     
     // Copy the file to the destination
@@ -294,6 +307,12 @@ pub fn run() {
                     app.emit("deep-link-received", &args[1]).unwrap();
                 }
             }
+            
+            // Initialize the updater module
+            if let Err(err) = updater::init(app) {
+                eprintln!("Failed to initialize updater: {}", err);
+            }
+            
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -303,7 +322,12 @@ pub fn run() {
             copy_file_to_clipboard,
             save_file,
             handle_save_dialog_result,
-            set_theme
+            set_theme,
+            // GitHub update system commands
+            updater::check_for_updates,
+            updater::download_asset,
+            updater::verify_file_hash,
+            updater::install_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
