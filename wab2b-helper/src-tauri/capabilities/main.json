@@ -13,7 +13,11 @@
     {
       "identifier": "opener:allow-open-path",
       "allow": [
-        { "path": "*" }
+        { "path": "*" },
+        { "path": "${tempDir}/**" },
+        { "path": "${localDataDir}/**" },
+        { "path": "${appLocalDataDir}/**" },
+        { "path": "${appDataDir}/**" }
       ]
     },
     "dialog:allow-save",

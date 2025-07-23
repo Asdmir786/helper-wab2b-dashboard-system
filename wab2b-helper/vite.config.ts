@@ -26,7 +26,6 @@ export default defineConfig({
             if (
               id.includes('animejs') ||
               id.includes('react-markdown') ||
-              id.includes('react-player') ||
               id.includes('lodash') ||
               id.includes('date-fns')
             ) {

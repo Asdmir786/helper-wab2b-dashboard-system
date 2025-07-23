@@ -20,8 +20,9 @@ use tauri_plugin_fs;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_dialog::DialogExt;
 
-// Import the updater module
+// Import modules
 pub mod updater;
+pub mod settings;
 
 // Global state to store downloaded files
 struct AppState {
@@ -87,6 +88,8 @@ async fn download_file(
     app_handle: AppHandle,
     url: String,
 ) -> Result<FileInfo, Error> {
+    println!("Starting download for URL: {}", url);
+    
     // Parse the URL
     let parsed_url = Url::parse(&url).map_err(|_| Error::InvalidUrl(url.clone()))?;
     
@@ -116,14 +119,39 @@ async fn download_file(
     // Create the file
     let mut file = tokio::fs::File::create(&file_path).await?;
     
-    // Download the file
-    let client = reqwest::Client::new();
-    let res = client.get(&url).send().await?;
+    // Download the file with proper headers and better error handling
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .timeout(std::time::Duration::from_secs(60))
+        .danger_accept_invalid_certs(true) // Accept invalid certs for better compatibility
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .build()
+        .map_err(|e| Error::RequestError(e))?;
+    
+    println!("Sending request to: {}", url);
+    
+    let res = client
+        .get(&url)
+        .header("Accept", "*/*")
+        .header("Accept-Language", "en-US,en;q=0.9")
+        .header("Cache-Control", "no-cache")
+        .header("Pragma", "no-cache")
+        .send()
+        .await
+        .map_err(|e| {
+            println!("Request failed: {}", e);
+            Error::RequestError(e)
+        })?;
+    
+    println!("Response status: {}", res.status());
     
     if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        println!("Download failed with status {}: {}", status, error_text);
         return Err(Error::DownloadError(format!(
-            "Failed to download file: HTTP status {}",
-            res.status()
+            "Failed to download file: HTTP status {} - {}",
+            status, error_text
         )));
     }
     
@@ -281,6 +309,76 @@ fn set_theme(app_handle: AppHandle, theme: String) -> Result<(), Error> {
   Ok(())
 }
 
+// Command to open a file using the system's default application
+#[tauri::command]
+async fn open_file(path: String) -> Result<(), Error> {
+    use std::process::{Command, Stdio};
+    
+    println!("Attempting to open file: {}", path);
+    
+    // Check if the file exists
+    if !std::path::Path::new(&path).exists() {
+        return Err(Error::FileNotFound(path));
+    }
+    
+    #[cfg(target_os = "windows")]
+    {
+        let result = Command::new("cmd")
+            .args(["/C", "start", "", &path])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+            
+        match result {
+            Ok(_) => println!("Successfully launched file with cmd"),
+            Err(e) => {
+                println!("Failed to open file with cmd: {}", e);
+                // Try alternative method with ShellExecute
+                let result = Command::new("rundll32.exe")
+                    .args(["url.dll,FileProtocolHandler", &path])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn();
+                    
+                if let Err(e) = result {
+                    println!("Failed to open file with rundll32: {}", e);
+                    return Err(Error::IoError(e));
+                }
+            }
+        }
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        let result = Command::new("open")
+            .arg(&path)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+            
+        if let Err(e) = result {
+            println!("Failed to open file on macOS: {}", e);
+            return Err(Error::IoError(e));
+        }
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        let result = Command::new("xdg-open")
+            .arg(&path)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+            
+        if let Err(e) = result {
+            println!("Failed to open file on Linux: {}", e);
+            return Err(Error::IoError(e));
+        }
+    }
+    
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let state = init_app_state().expect("Failed to initialize app state");
@@ -323,6 +421,10 @@ pub fn run() {
             save_file,
             handle_save_dialog_result,
             set_theme,
+            open_file,
+            // Settings commands
+            settings::get_settings,
+            settings::update_settings,
             // GitHub update system commands
             updater::check_for_updates,
             updater::download_asset,

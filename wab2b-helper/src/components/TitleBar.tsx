@@ -63,21 +63,21 @@ const TitleBar: React.FC<TitleBarProps> = ({ version, isDarkMode, updateManager 
 
 	return (
 		<div
-			className="titlebar flex items-center px-2 h-10 select-none bg-gray-50 dark:bg-gray-900"
+			className="titlebar flex items-center px-2 h-10 select-none bg-[var(--file-header-bg-light)] dark:bg-gray-900 border-b border-[var(--border-light)] dark:border-gray-700"
 			data-tauri-drag-region
 		>
 			<div className="flex items-center flex-1" data-tauri-drag-region>
 				<div className="flex items-center">
 					<img src="/tauri.svg" className="w-5 h-5 mr-2" alt="Logo" />
 					<span
-						className="text-sm font-medium text-gray-900 dark:text-white"
+						className="text-sm font-medium text-[var(--file-header-text-light)] dark:text-white"
 						data-tauri-drag-region
 						ref={appNameRef}
 					>
 						wab2b-helper
 					</span>
 					<span
-						className="text-xs ml-2 text-gray-800 dark:text-gray-300 font-mono"
+						className="text-xs ml-2 text-[var(--app-text-light)] dark:text-gray-300 font-mono"
 						data-tauri-drag-region
 					>
 						v{version}
@@ -92,7 +92,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ version, isDarkMode, updateManager 
 			</div>
 			<div className="flex" ref={buttonsRef}>
 				<button
-					className="titlebar-button group rounded-md p-2 mx-0.5 text-gray-800 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
+					className="titlebar-button group rounded-md p-2 mx-0.5 text-[var(--app-text-light)] hover:bg-gray-300 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
 					onClick={handleMinimize}
 					onMouseEnter={(e) => animateButtonHover(e.currentTarget)}
 					onMouseLeave={(e) => animateButtonLeave(e.currentTarget)}
@@ -108,13 +108,13 @@ const TitleBar: React.FC<TitleBarProps> = ({ version, isDarkMode, updateManager 
 						strokeWidth="2"
 						strokeLinecap="round"
 						strokeLinejoin="round"
-						className={`${isDarkMode ? 'text-white' : 'text-black'} group-hover:text-white`}
+						className={`${isDarkMode ? 'text-white' : 'text-[var(--app-text-light)]'} group-hover:text-gray-800`}
 					>
 						<line x1="5" y1="12" x2="19" y2="12"></line>
 					</svg>
 				</button>
 				<button
-					className="titlebar-button group rounded-md p-2 mx-0.5 text-gray-800 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
+					className="titlebar-button group rounded-md p-2 mx-0.5 text-[var(--app-text-light)] hover:bg-gray-300 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
 					onClick={handleMaximize}
 					onMouseEnter={(e) => animateButtonHover(e.currentTarget)}
 					onMouseLeave={(e) => animateButtonLeave(e.currentTarget)}
@@ -130,13 +130,13 @@ const TitleBar: React.FC<TitleBarProps> = ({ version, isDarkMode, updateManager 
 						strokeWidth="2"
 						strokeLinecap="round"
 						strokeLinejoin="round"
-						className={`${isDarkMode ? 'text-white' : 'text-black'} group-hover:text-white`}
+						className={`${isDarkMode ? 'text-white' : 'text-[var(--app-text-light)]'} group-hover:text-gray-800`}
 					>
 						<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
 					</svg>
 				</button>
 				<button
-					className="titlebar-button group rounded-md p-2 ml-0.5 text-gray-800 hover:bg-red-500 hover:text-white dark:text-gray-200 dark:hover:bg-red-500 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-red-500"
+					className="titlebar-button group rounded-md p-2 ml-0.5 text-[var(--app-text-light)] hover:bg-red-500 hover:text-white dark:text-gray-200 dark:hover:bg-red-500 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-red-500"
 					onClick={handleClose}
 					onMouseEnter={(e) => animateButtonHover(e.currentTarget)}
 					onMouseLeave={(e) => animateButtonLeave(e.currentTarget)}
@@ -152,7 +152,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ version, isDarkMode, updateManager 
 						strokeWidth="2"
 						strokeLinecap="round"
 						strokeLinejoin="round"
-						className={`${isDarkMode ? 'text-white' : 'text-black'} group-hover:text-white`}
+						className={`${isDarkMode ? 'text-white' : 'text-[var(--app-text-light)]'} group-hover:text-white`}
 					>
 						<line x1="18" y1="6" x2="6" y2="18"></line>
 						<line x1="6" y1="6" x2="18" y2="18"></line>

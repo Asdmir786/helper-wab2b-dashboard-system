@@ -11,14 +11,16 @@ import { ReleaseInfo, DownloadProgress } from './types';
  * Check for updates from GitHub
  * @param owner GitHub repository owner
  * @param repo GitHub repository name
+  * @param includeBeta Whether to include beta releases
  * @returns Promise with release information
  */
 export async function checkForUpdates(
   owner: string,
-  repo: string
+  repo: string,
+  includeBeta: boolean = false
 ): Promise<ReleaseInfo> {
   try {
-    return await invoke<ReleaseInfo>('check_for_updates', { owner, repo });
+    return await invoke<ReleaseInfo>('check_for_updates', { owner, repo, includeBeta });
   } catch (error) {
     throw new Error(`Failed to check for updates: ${error instanceof Error ? error.message : String(error)}`);
   }

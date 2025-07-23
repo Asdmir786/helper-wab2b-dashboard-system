@@ -49,9 +49,16 @@ pub struct DownloadProgress {
 
 /// Check for updates from GitHub
 #[command]
-pub async fn check_for_updates(owner: &str, repo: &str) -> Result<ReleaseInfo, String> {
+pub async fn check_for_updates(owner: &str, repo: &str, app_handle: tauri::AppHandle, include_beta: bool) -> Result<ReleaseInfo, String> {
+    // Load settings to check if beta updates are enabled
+    let settings = crate::settings::load_settings(&app_handle)
+        .map_err(|e| format!("Failed to load settings: {}", e))?;
+    
+    // Determine whether to include beta releases based on settings
+    let should_include_beta = include_beta || settings.beta_mode;
+    
     // Call the GitHub API to check for the latest release
-    let mut release_info = github::check_latest_release(owner, repo).await?;
+    let mut release_info = github::check_latest_release(owner, repo, should_include_beta).await?;
     
     // Check if there's a suitable asset for the current platform
     if !release_info.assets.is_empty() {

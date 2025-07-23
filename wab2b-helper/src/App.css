@@ -10,10 +10,39 @@
   --primary-dark: #60A5FA;
   --surface-light: #FFFFFF;
   --surface-dark: #1E293B;
-  --border-light: #E2E8F0;
+  --border-light: #94A3B8; /* Darker border for better visibility in light mode */
   --border-dark: #334155;
-  --file-preview-bg-light: #F3F4F6;
+  --file-preview-bg-light: #E0EAFF; /* More saturated blueish background for better contrast */
   --file-preview-bg-dark: #1F2937;
+  --file-header-bg-light: #F1F5F9; /* Slightly darker background for file header */
+  --file-header-text-light: #0F172A; /* Darker text for better readability */
+  --button-bg-light: #E2E8F0; /* Slightly darker button background for better visibility */
+  --button-text-light: #0F172A; /* Darker button text for better contrast */
+}
+
+/* Ensure action buttons are properly styled in light mode */
+.action-button-copy {
+  background-color: var(--button-bg-light) !important;
+  color: var(--button-text-light) !important;
+  border: 1px solid var(--border-light) !important;
+}
+
+.dark .action-button-copy {
+  background-color: rgb(31, 41, 55) !important;
+  color: rgb(243, 244, 246) !important;
+  border: 1px solid rgb(55, 65, 81) !important;
+}
+
+.action-button-save {
+  background-color: var(--primary-light) !important;
+  color: white !important;
+  border: 1px solid var(--primary-light) !important;
+}
+
+.dark .action-button-save {
+  background-color: var(--primary-dark) !important;
+  color: white !important;
+  border: 1px solid var(--primary-dark) !important;
 }
 
 html, body {
@@ -104,21 +133,6 @@ body {
   background: #64748B;
 }
 
-/* Loading spinner */
-.spinner {
-  border: 3px solid rgba(203, 213, 225, 0.3);
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border-left-color: var(--primary-light);
-}
-
-/* Dark mode spinner */
-.dark .spinner {
-  border-color: rgba(71, 85, 105, 0.3);
-  border-left-color: var(--primary-dark);
-}
-
 /* Make sure the main container has a solid background */
 main {
   background-color: var(--app-bg-light);
@@ -144,9 +158,9 @@ main {
 
 /* Light mode specific styles */
 .waiting-container {
-  background: linear-gradient(to bottom, #EFF6FF, #F8FAFC);
+  background: linear-gradient(to bottom, #E0EAFF, #F1F5F9);
   border: 1px solid var(--border-light);
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05), 0 10px 15px rgba(0,0,0,0.025);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.08), 0 10px 15px rgba(0,0,0,0.04);
   transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -156,16 +170,41 @@ main {
   box-shadow: 0 4px 15px rgba(0,0,0,0.2);
 }
 
+/* Improved light mode styles */
+.waiting-container h3 {
+  color: var(--app-text-light);
+  font-weight: 600;
+}
+
+.dark .waiting-container h3 {
+  color: white !important;
+  font-weight: 600;
+}
+
+.waiting-container p {
+  color: var(--app-text-light) !important;
+}
+
+.waiting-container code {
+  background-color: #DBEAFE;
+  color: #1E40AF;
+  border: 1px solid #BFDBFE;
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
 /* File preview background styles */
 .file-preview-bg {
-  background-color: var(--file-preview-bg-light);
-  border: 1px solid var(--border-light);
+  background-color: #E0EAFF;
+  border: 1px solid #94A3B8;
   transition: background-color 0.3s ease, border-color 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .dark .file-preview-bg {
-  background-color: var(--file-preview-bg-dark);
-  border: 1px solid var(--border-dark);
+  background-color: #1F2937;
+  border: 1px solid #334155;
+  box-shadow: none;
 }
 
 .waiting-container p, .waiting-container div {

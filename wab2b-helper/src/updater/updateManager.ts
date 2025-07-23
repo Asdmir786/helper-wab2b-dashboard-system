@@ -8,6 +8,7 @@ import { checkForUpdates, downloadAsset, verifyFileHash, installUpdate } from '.
 import { UpdateSettings, UpdateState, Asset } from './types';
 import { appDataDir } from '@tauri-apps/api/path';
 import { join } from '@tauri-apps/api/path';
+import { invoke } from '@tauri-apps/api/core';
 
 /**
  * Default update settings
@@ -17,6 +18,14 @@ const DEFAULT_SETTINGS: UpdateSettings = {
   githubOwner: 'Asdmir786',
   githubRepo: 'helper-wab2b-dashboard-system'
 };
+
+/**
+ * Interface for app settings from the backend
+ */
+interface AppSettings {
+  autoUpdate: boolean;
+  betaMode: boolean;
+}
 
 /**
  * Storage key for persisting update settings
@@ -36,13 +45,9 @@ export class UpdateManager {
    * @param settings Optional custom settings
    */
   constructor(settings?: Partial<UpdateSettings>) {
-    // Load saved settings from localStorage if available
-    const savedSettings = this.loadSettings();
-    
-    // Merge default settings with saved settings and provided settings
+    // Initialize with default settings, will be updated from backend later
     this.settings = { 
-      ...DEFAULT_SETTINGS, 
-      ...savedSettings, 
+      ...DEFAULT_SETTINGS,
       ...settings 
     };
     
@@ -56,21 +61,26 @@ export class UpdateManager {
   }
   
   /**
-   * Load settings from localStorage
-   * @returns Saved settings or empty object if none found
+   * Load settings from the backend
+   * @returns Promise that resolves when settings are loaded
    */
-  private loadSettings(): Partial<UpdateSettings> {
+  public async loadSettingsFromBackend(): Promise<void> {
     try {
-      const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
-      return savedSettings ? JSON.parse(savedSettings) : {};
+      const appSettings = await invoke<AppSettings>('get_settings');
+      
+      // Update the settings with the values from the backend
+      this.settings.autoCheck = appSettings.autoUpdate;
+      
+      // Notify listeners of the updated settings
+      this.stateChangeListeners.forEach(listener => listener(this.state));
     } catch (error) {
-      console.error('Failed to load update settings:', error);
-      return {};
+      console.error('Failed to load settings from backend:', error);
     }
   }
   
   /**
-   * Save current settings to localStorage
+   * Save settings to localStorage for persistence between sessions
+   * Note: The actual auto-update setting is stored in the backend
    */
   private saveSettings(): void {
     try {
@@ -104,20 +114,38 @@ export class UpdateManager {
   /**
    * Check for updates from GitHub
    * @param manual Whether this is a manual check
+   * @param includeBeta Whether to include beta releases in the update check
    * @returns Promise with boolean indicating if an update is available
    */
-  public async checkForUpdates(_manual: boolean = false): Promise<boolean> {
+  public async checkForUpdates(manual: boolean = false, includeBeta?: boolean): Promise<boolean> {
     try {
+      // Load the latest settings from the backend
+      await this.loadSettingsFromBackend();
+      
+      // If this is not a manual check and auto-update is disabled, don't check for updates
+      if (!manual && !this.settings.autoCheck) {
+        console.log('Automatic updates are disabled. Skipping update check.');
+        return false;
+      }
+      
       this.setState({ status: 'checking' });
       
       // Get current version
       const currentVersion = await getVersion();
       this.setState({ currentVersion });
       
-      // Check for updates
+      // Get the beta mode setting from the backend if includeBeta is not provided
+      let shouldIncludeBeta = includeBeta;
+      if (shouldIncludeBeta === undefined) {
+        const appSettings = await invoke<AppSettings>('get_settings');
+        shouldIncludeBeta = appSettings.betaMode;
+      }
+      
+      // Check for updates, passing the beta mode setting
       const releaseInfo = await checkForUpdates(
         this.settings.githubOwner,
-        this.settings.githubRepo
+        this.settings.githubRepo,
+        shouldIncludeBeta
       );
       
       // Compare versions
@@ -335,8 +363,21 @@ export class UpdateManager {
    * Enable or disable automatic updates
    * @param enabled Whether automatic updates should be enabled
    */
-  public setAutoUpdateEnabled(enabled: boolean): void {
+  public async setAutoUpdateEnabled(enabled: boolean): Promise<void> {
     this.settings.autoCheck = enabled;
     this.saveSettings();
+    
+    try {
+      // Get current settings from backend
+      const appSettings = await invoke<AppSettings>('get_settings');
+      
+      // Update the auto-update setting
+      appSettings.autoUpdate = enabled;
+      
+      // Save the updated settings to the backend
+      await invoke('update_settings', { settings: appSettings });
+    } catch (error) {
+      console.error('Failed to save auto-update setting to backend:', error);
+    }
   }
 }

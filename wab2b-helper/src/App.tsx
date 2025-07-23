@@ -8,6 +8,8 @@ const TitleBar = React.lazy(() => import("./components/TitleBar"));
 const FilePreview = React.lazy(() => import("./components/FilePreview"));
 const ActionButtons = React.lazy(() => import("./components/ActionButtons"));
 const ThemeToggle = React.lazy(() => import("./components/ThemeToggle"));
+const SettingsIcon = React.lazy(() => import("./components/SettingsIcon"));
+const SettingsModal = React.lazy(() => import("./components/SettingsModal"));
 const ProgressBar = React.lazy(() => import("./components/ProgressBar"));
 import packageJson from "../package.json";
 import { openPath } from '@tauri-apps/plugin-opener';
@@ -35,7 +37,6 @@ function App() {
   const rootRef = useRef<HTMLDivElement>(null);
   const scopeRef = useRef<any>(null);
   const fileContentRef = useRef<HTMLDivElement>(null);
-  const spinnerRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   // Add toast state
@@ -70,10 +71,23 @@ function App() {
       }
     });
 
-    // Check for updates on app start
-    if (updateManager.getUpdateState().status === 'idle') {
-      updateManager.checkForUpdates(false).catch(console.error);
-    }
+    // Check for updates on app start based on auto-update setting
+    const checkUpdatesOnStart = async () => {
+      try {
+        // Get settings from backend
+        const appSettings = await invoke<{ autoUpdate: boolean, betaMode: boolean }>('get_settings');
+        
+        // Only check for updates if auto-update is enabled
+        if (appSettings.autoUpdate && updateManager.getUpdateState().status === 'idle') {
+          // Pass the beta mode setting to the update check
+          updateManager.checkForUpdates(false, appSettings.betaMode).catch(console.error);
+        }
+      } catch (error) {
+        console.error('Failed to load settings for update check:', error);
+      }
+    };
+
+    checkUpdatesOnStart();
 
     return unsubscribe;
   }, [updateManager]);
@@ -94,16 +108,6 @@ function App() {
       root: rootRef.current
     }).add(self => {
       // Register reusable animations
-      self.add('spinnerRotate', () => {
-        if (!spinnerRef.current) return;
-        animate(spinnerRef.current, {
-          rotate: '360deg',
-          duration: 1000,
-          easing: 'linear',
-          loop: true
-        });
-      });
-
       self.add('showFileContent', () => {
         if (!fileContentRef.current) return;
         animate(fileContentRef.current, {
@@ -151,8 +155,8 @@ function App() {
         const copyButtons = document.querySelectorAll('.action-button-copy');
         if (copyButtons.length > 0) {
           animate(copyButtons, {
-            backgroundColor: isDark ? 'rgb(31, 41, 55)' : 'rgb(255, 255, 255)',
-            color: isDark ? 'rgb(243, 244, 246)' : 'rgb(31, 41, 55)',
+            backgroundColor: isDark ? 'rgb(31, 41, 55)' : 'rgb(226, 232, 240)', // Using --button-bg-light value
+            color: isDark ? 'rgb(243, 244, 246)' : 'rgb(15, 23, 42)', // Using --button-text-light value
             easing: 'easeInOutQuad',
             duration: 300
           });
@@ -172,7 +176,7 @@ function App() {
         const fileInfo = document.querySelectorAll('.file-preview h2, .file-preview p');
         if (fileInfo.length > 0) {
           animate(fileInfo, {
-            color: isDark ? 'rgb(243, 244, 246)' : 'rgb(31, 41, 55)',
+            color: isDark ? 'rgb(243, 244, 246)' : 'rgb(15, 23, 42)', // Using --file-header-text-light value
             easing: 'easeInOutQuad',
             duration: 300
           });
@@ -182,7 +186,7 @@ function App() {
         const filePreviewBgs = document.querySelectorAll('.file-preview-bg');
         if (filePreviewBgs.length > 0) {
           animate(filePreviewBgs, {
-            backgroundColor: isDark ? 'rgb(31, 41, 55)' : 'rgb(243, 244, 246)',
+            backgroundColor: isDark ? 'rgb(31, 41, 55)' : 'rgb(224, 234, 255)', // Using --file-preview-bg-light value
             easing: 'easeInOutQuad',
             duration: 300
           });
@@ -207,11 +211,9 @@ function App() {
     };
   }, []);
 
-  // Start spinner animation when loading changes
+  // Loading state change handler
   useEffect(() => {
-    if (loading && scopeRef.current?.methods) {
-      scopeRef.current.methods.spinnerRotate();
-    }
+    // Handle loading state changes here if needed
   }, [loading]);
 
   // Animate file content when file is set
@@ -349,21 +351,35 @@ function App() {
   // Preview file
   const handlePreview = async () => {
     if (!isTauri || !file) return;
-    // Skip external open for previewable media types (images, video, audio, PDF)
+    // Skip external open for previewable media types that are handled in the UI (images, video, audio)
     if (
       file.mime_type.startsWith('video/') ||
       file.mime_type.startsWith('image/') ||
-      file.mime_type.startsWith('audio/') ||
-      file.mime_type === 'application/pdf'
+      file.mime_type.startsWith('audio/')
     ) {
       return;
     }
+    
     try {
-      // Use the JS API for opener for other files
-      await openPath(file.file_path);
+      // For PDF files, use the Rust backend to open them
+      if (file.mime_type === 'application/pdf') {
+        await invoke("open_file", { path: file.file_path });
+      } else {
+        // Use the JS API for opener for other files
+        await openPath(file.file_path);
+      }
     } catch (err) {
       console.error('Error previewing file:', err);
       setError(`Failed to preview file: ${err}`);
+      
+      // If opening fails, try to save the file and then open it
+      try {
+        const savedPath = await invoke<string>("save_file", { id: file.id });
+        setToast({ message: `File saved to: ${savedPath}`, type: 'success' });
+      } catch (saveErr) {
+        console.error('Error saving file:', saveErr);
+        setError(`Failed to save file: ${saveErr}`);
+      }
     }
   };
 
@@ -407,6 +423,9 @@ function App() {
 
   // State to control the visibility of the update modal
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  
+  // State to control the visibility of the settings modal
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // Show update modal when an update is available
   useEffect(() => {
@@ -438,18 +457,31 @@ function App() {
         )}
 
         <main ref={mainRef} className="flex-1 flex flex-col p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-        <div className="absolute top-10 right-4">
+        <div className="absolute top-10 right-4 flex items-center space-x-2">
           <Suspense fallback={<LoadingFallback />}>
+            <SettingsIcon onClick={() => setShowSettingsModal(true)} isDarkMode={theme === 'dark'} />
             <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
           </Suspense>
         </div>
+        
+        {/* Settings Modal */}
+        <Suspense fallback={<LoadingFallback />}>
+          {showSettingsModal && (
+            <SettingsModal 
+              isOpen={showSettingsModal} 
+              onClose={() => setShowSettingsModal(false)} 
+              isDarkMode={theme === 'dark'} 
+              updateManager={updateManager}
+            />
+          )}
+        </Suspense>
 
         <div className="flex-1 flex flex-col items-center justify-center">
           {loading ? (
             <div className="flex flex-col items-center justify-center space-y-4">
-              <div className="spinner" ref={spinnerRef}></div>
-              <p className="text-gray-800 dark:text-gray-300 font-medium">Downloading file...</p>
-              <div ref={progressBarRef}>
+              <div className="text-[var(--app-text-light)] dark:text-gray-200 font-medium">Loading...</div>
+              <p className="text-[var(--app-text-light)] dark:text-gray-300 font-medium">Downloading file...</p>
+              <div ref={progressBarRef} className="w-64">
                 <Suspense fallback={<LoadingFallback />}>
                   <ProgressBar progress={progress} />
                 </Suspense>
@@ -473,22 +505,27 @@ function App() {
                 </Suspense>
               </div>
               <Suspense fallback={<LoadingFallback />}>
-                <ActionButtons onCopy={handleCopy} onSaveDownload={handleSaveDownload} />
+                <div className="w-full" style={{ 
+                  "--action-button-bg": theme === "dark" ? "rgb(31, 41, 55)" : "var(--button-bg-light)",
+                  "--action-button-text": theme === "dark" ? "rgb(243, 244, 246)" : "var(--button-text-light)"
+                } as React.CSSProperties}>
+                  <ActionButtons onCopy={handleCopy} onSaveDownload={handleSaveDownload} />
+                </div>
               </Suspense>
             </div>
           ) : (
             <div className="text-center">
-              <div className="waiting-container p-8 rounded-lg transition-colors duration-200 file-preview-bg">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-4 text-blue-500 dark:text-blue-400">
+              <div className="waiting-container p-8 rounded-lg transition-colors duration-200 file-preview-bg shadow-md border border-[var(--border-light)] dark:border-gray-700">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-4 text-blue-700 dark:text-blue-400">
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="12" y1="8" x2="12" y2="16"></line>
                   <line x1="8" y1="12" x2="16" y2="12"></line>
                 </svg>
-                <h3 className="text-lg font-medium mb-2 transition-colors duration-200">Waiting for content...</h3>
-                <p className="font-sans font-medium text-gray-900 dark:text-gray-400 mb-4 transition-colors duration-200">
-                  This app handles <code className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 px-2 py-1 rounded font-mono text-sm transition-colors duration-200">wab2b-helper:</code> protocol links, from dashboard.wab2b.com.
+                <h3 className="text-lg font-semibold mb-2 text-[var(--file-header-text-light)] dark:text-white transition-colors duration-200">Waiting for content...</h3>
+                <p className="font-sans font-medium text-[var(--app-text-light)] dark:text-gray-400 mb-4 transition-colors duration-200">
+                  This app handles <code className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 px-2 py-1 rounded font-mono text-sm transition-colors duration-200 border border-blue-200 dark:border-transparent">wab2b-helper:</code> protocol links, from dashboard.wab2b.com.
                 </p>
-                <div className="font-mono text-sm text-gray-900 dark:text-gray-400 mt-3 transition-colors duration-200">
+                <div className="font-mono text-sm text-[var(--app-text-light)] dark:text-gray-400 mt-3 transition-colors duration-200">
                   No user input needed - just wait for browser protocol events
                 </div>
               </div>
@@ -496,12 +533,16 @@ function App() {
           )}
 
           {error && (
-            <div className="error-message mt-4 p-4 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800">
+            <div className="error-message mt-4 p-4 bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300 rounded-lg border border-red-300 dark:border-red-800 shadow-sm font-medium">
               {error}
             </div>
           )}
           {toast && (
-            <div className={`fixed bottom-4 right-4 px-4 py-2 rounded-lg ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white`}>
+            <div className={`fixed bottom-4 right-4 px-4 py-2 rounded-lg shadow-lg border ${
+              toast.type === 'success' 
+                ? 'bg-green-600 border-green-700 dark:bg-green-500 dark:border-green-600' 
+                : 'bg-red-600 border-red-700 dark:bg-red-500 dark:border-red-600'
+            } text-white font-medium`}>
               {toast.message}
             </div>
           )}

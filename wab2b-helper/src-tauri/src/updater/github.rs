@@ -13,15 +13,22 @@ use futures_util::StreamExt;
 use tauri::Emitter;
 
 /// Check for the latest release on GitHub
-pub async fn check_latest_release(owner: &str, repo: &str) -> Result<ReleaseInfo, String> {
+pub async fn check_latest_release(owner: &str, repo: &str, include_beta: bool) -> Result<ReleaseInfo, String> {
     // Create a new HTTP client
     let client = Client::new();
     
-    // Build the GitHub API URL for the latest release
-    let url = format!(
-        "https://api.github.com/repos/{}/{}/releases/latest",
-        owner, repo
-    );
+    // Build the GitHub API URL - use /releases for beta support or /releases/latest for stable only
+    let url = if include_beta {
+        format!(
+            "https://api.github.com/repos/{}/{}/releases",
+            owner, repo
+        )
+    } else {
+        format!(
+            "https://api.github.com/repos/{}/{}/releases/latest",
+            owner, repo
+        )
+    };
     
     // Send the request with appropriate headers
     let response = client
@@ -41,10 +48,25 @@ pub async fn check_latest_release(owner: &str, repo: &str) -> Result<ReleaseInfo
     }
     
     // Parse the response as JSON
-    let release_data = response
-        .json::<Value>()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    let release_data = if include_beta {
+        // For beta releases, get the first release from the array
+        let releases = response
+            .json::<Vec<Value>>()
+            .await
+            .map_err(|e| format!("Failed to parse response: {}", e))?;
+        
+        if releases.is_empty() {
+            return Err("No releases found".to_string());
+        }
+        
+        releases[0].clone()
+    } else {
+        // For stable releases, get the single latest release
+        response
+            .json::<Value>()
+            .await
+            .map_err(|e| format!("Failed to parse response: {}", e))?
+    };
     
     // Parse the release information
     let mut release_info = parse_release_info(release_data)?;
