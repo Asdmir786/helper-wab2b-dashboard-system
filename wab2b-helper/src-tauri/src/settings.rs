@@ -45,6 +45,7 @@ pub fn load_settings(app_handle: &AppHandle) -> Result<AppSettings> {
     // Read and parse the settings file
     let settings_json = fs::read_to_string(settings_path)?;
     let settings: AppSettings = serde_json::from_str(&settings_json)?;
+    println!("Loaded settings: beta_mode = {}", settings.beta_mode);
     
     Ok(settings)
 }

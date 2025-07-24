@@ -17,10 +17,12 @@ import { ReleaseInfo, DownloadProgress } from './types';
 export async function checkForUpdates(
   owner: string,
   repo: string,
-  includeBeta: boolean = false
+  includeBeta?: boolean
 ): Promise<ReleaseInfo> {
   try {
-    return await invoke<ReleaseInfo>('check_for_updates', { owner, repo, includeBeta });
+    // Ensure includeBeta is explicitly true or false
+    const betaParam = includeBeta === undefined ? false : includeBeta;
+    return await invoke<ReleaseInfo>('check_for_updates', { owner, repo, includeBeta: betaParam });
   } catch (error) {
     throw new Error(`Failed to check for updates: ${error instanceof Error ? error.message : String(error)}`);
   }

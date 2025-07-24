@@ -4956,7 +4956,7 @@ dependencies = [
 
 [[package]]
 name = "wab2b-helper"
-version = "0.2.0"
+version = "0.2.0-release"
 dependencies = [
  "anyhow",
  "futures-util",

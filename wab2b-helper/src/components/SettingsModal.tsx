@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -13,16 +14,18 @@ interface AppSettings {
   betaMode: boolean;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMode, updateManager }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, updateManager }) => {
   const [settings, setSettings] = useState<AppSettings>({
     autoUpdate: true,
     betaMode: false
   });
+  const [isCurrentVersionBeta, setIsCurrentVersionBeta] = useState<boolean>(false);
 
   // Load settings when modal opens
   useEffect(() => {
     if (isOpen) {
       loadSettings();
+      loadCurrentVersion();
     }
   }, [isOpen]);
 
@@ -32,6 +35,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
       setSettings(savedSettings);
     } catch (error) {
       console.error('Failed to load settings:', error);
+    }
+  };
+
+  const loadCurrentVersion = async () => {
+    try {
+      const version = await getVersion();
+      // Check if current version is a beta/prerelease version
+      const isBeta = version.includes('-beta') || version.includes('-alpha') || version.includes('-rc') || version.includes('-pre');
+      setIsCurrentVersionBeta(isBeta);
+    } catch (error) {
+      console.error('Failed to get current version:', error);
     }
   };
 
@@ -51,22 +65,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
   const handleToggleBetaMode = async () => {
     const newBetaMode = !settings.betaMode;
     setSettings(prev => ({ ...prev, betaMode: newBetaMode }));
-    
+
     // If disabling beta mode, check for the latest stable release
     if (!newBetaMode) {
       try {
         // Save the setting immediately to ensure the next update check uses the new setting
         await invoke('update_settings', { settings: { ...settings, betaMode: newBetaMode } });
-        
+
         // Check for the latest stable release using the updateManager if available
         if (updateManager) {
           await updateManager.checkForUpdates(true, false); // Manual check, exclude beta
         } else {
           console.log('UpdateManager not available, using direct invoke');
-          await invoke('check_for_updates', { 
-            owner: 'Asdmir786', 
+          await invoke('check_for_updates', {
+            owner: 'Asdmir786',
             repo: 'helper-wab2b-dashboard-system',
-            includeBeta: false 
+            includeBeta: false
           });
         }
       } catch (error) {
@@ -78,12 +92,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-md p-6 relative">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-md p-6 relative z-[10000]">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Settings</h2>
-          <button 
+          <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
@@ -105,9 +119,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer" 
+              <input
+                type="checkbox"
+                className="sr-only peer"
                 checked={settings.autoUpdate}
                 onChange={handleToggleAutoUpdate}
               />
@@ -118,15 +132,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
           {/* Beta Mode Setting */}
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-md font-medium text-gray-900 dark:text-white">{settings.betaMode ? "Beta Mode" : "Go back to Stable Release"}</h3>
+              <h3 className="text-md font-medium text-gray-900 dark:text-white">
+                {settings.betaMode ? "Beta Mode" : (isCurrentVersionBeta ? "Go back to Stable Release" : "Beta Mode")}
+              </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {settings.betaMode ? "Receive beta updates with new features" : "Check for the latest stable release"}
+                {settings.betaMode
+                  ? "Receive beta updates with new features"
+                  : (isCurrentVersionBeta
+                    ? "Check for the latest stable release"
+                    : "Receive beta updates with new features"
+                  )
+                }
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer" 
+              <input
+                type="checkbox"
+                className="sr-only peer"
                 checked={settings.betaMode}
                 onChange={handleToggleBetaMode}
               />

@@ -1,6 +1,6 @@
 [package]
 name = "wab2b-helper"
-version = "0.2.0"
+version = "0.2.0-release"
 description = "wab2b-helper"
 authors = ["you"]
 edition = "2021"

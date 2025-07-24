@@ -8,8 +8,8 @@ const TitleBar = React.lazy(() => import("./components/TitleBar"));
 const FilePreview = React.lazy(() => import("./components/FilePreview"));
 const ActionButtons = React.lazy(() => import("./components/ActionButtons"));
 const ThemeToggle = React.lazy(() => import("./components/ThemeToggle"));
-const SettingsIcon = React.lazy(() => import("./components/SettingsIcon"));
-const SettingsModal = React.lazy(() => import("./components/SettingsModal"));
+import SettingsIcon from "./components/SettingsIcon";
+import SettingsModal from "./components/SettingsModal";
 const ProgressBar = React.lazy(() => import("./components/ProgressBar"));
 import packageJson from "../package.json";
 import { openPath } from '@tauri-apps/plugin-opener';
@@ -458,14 +458,11 @@ function App() {
 
         <main ref={mainRef} className="flex-1 flex flex-col p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
         <div className="absolute top-10 right-4 flex items-center space-x-2">
-          <Suspense fallback={<LoadingFallback />}>
             <SettingsIcon onClick={() => setShowSettingsModal(true)} isDarkMode={theme === 'dark'} />
             <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
-          </Suspense>
         </div>
         
         {/* Settings Modal */}
-        <Suspense fallback={<LoadingFallback />}>
           {showSettingsModal && (
             <SettingsModal 
               isOpen={showSettingsModal} 
@@ -474,7 +471,6 @@ function App() {
               updateManager={updateManager}
             />
           )}
-        </Suspense>
 
         <div className="flex-1 flex flex-col items-center justify-center">
           {loading ? (

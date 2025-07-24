@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { UpdateManager } from '../updater';
 import { invoke } from '@tauri-apps/api/core';
 

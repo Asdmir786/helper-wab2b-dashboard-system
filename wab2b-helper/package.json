@@ -1,13 +1,14 @@
 {
   "name": "wab2b-helper",
   "private": true,
-  "version": "0.2.0-release",
+  "version": "0.2.0",
   "type": "module",
   "packageManager": "pnpm@10.13.1",
   "scripts": {
     "dev": "vite",
     "tauri:dev": "tauri dev",
-    "build": "tsc && vite build && tauri build && node scripts/generate-checksums.js",
+    "build:frontend": "tsc && vite build",
+    "build": "pnpm run build:frontend && tauri build && node ./scripts/generate-checksums.js",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:build": "tauri build"
