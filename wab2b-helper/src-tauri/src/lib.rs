@@ -309,6 +309,21 @@ fn set_theme(app_handle: AppHandle, theme: String) -> Result<(), Error> {
   Ok(())
 }
 
+// Command to read file as bytes for frontend consumption
+#[tauri::command]
+async fn read_file_bytes(path: String) -> Result<Vec<u8>, Error> {
+    println!("Reading file bytes for: {}", path);
+    
+    // Check if the file exists
+    if !std::path::Path::new(&path).exists() {
+        return Err(Error::FileNotFound(path));
+    }
+    
+    // Read the file
+    let bytes = tokio::fs::read(&path).await?;
+    Ok(bytes)
+}
+
 // Command to open a file using the system's default application
 #[tauri::command]
 async fn open_file(path: String) -> Result<(), Error> {
@@ -421,6 +436,7 @@ pub fn run() {
             save_file,
             handle_save_dialog_result,
             set_theme,
+            read_file_bytes,
             open_file,
             // Settings commands
             settings::get_settings,

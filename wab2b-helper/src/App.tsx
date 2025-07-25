@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { animate, createScope } from "animejs";
 import "./App.css";
-import React, {Suspense} from "react";
+import React, { Suspense } from "react";
 const TitleBar = React.lazy(() => import("./components/TitleBar"));
 const FilePreview = React.lazy(() => import("./components/FilePreview"));
 const ActionButtons = React.lazy(() => import("./components/ActionButtons"));
@@ -41,6 +42,10 @@ function App() {
   const progressBarRef = useRef<HTMLDivElement>(null);
   // Add toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  // Add app initialization state
+  const [isAppInitialized, setIsAppInitialized] = useState(false);
+  const [pendingDeepLink, setPendingDeepLink] = useState<string | null>(null);
+  const [isProcessingDeepLink, setIsProcessingDeepLink] = useState(false);
   // Initialize update manager
   const [updateManager] = useState<UpdateManager>(() => new UpdateManager({
     githubOwner: 'Asdmir786',
@@ -76,7 +81,7 @@ function App() {
       try {
         // Get settings from backend
         const appSettings = await invoke<{ autoUpdate: boolean, betaMode: boolean }>('get_settings');
-        
+
         // Only check for updates if auto-update is enabled
         if (appSettings.autoUpdate && updateManager.getUpdateState().status === 'idle') {
           // Pass the beta mode setting to the update check
@@ -98,6 +103,60 @@ function App() {
     setTheme(isDark ? "dark" : "light");
     document.documentElement.classList.toggle("dark", isDark);
   }, []);
+
+  // App initialization effect - ensures all components are ready before processing deep links
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        // Wait for DOM to be fully ready
+        await new Promise(resolve => {
+          if (document.readyState === 'complete') {
+            resolve(void 0);
+          } else {
+            window.addEventListener('load', () => resolve(void 0), { once: true });
+          }
+        });
+
+        // Additional delay to ensure React components are mounted and ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Mark app as initialized
+        setIsAppInitialized(true);
+        console.log('App initialization complete');
+      } catch (error) {
+        console.error('App initialization failed:', error);
+        setError('Failed to initialize application');
+        // Still mark as initialized to prevent hanging
+        setIsAppInitialized(true);
+      }
+    };
+
+    initializeApp();
+  }, []);
+
+  // Process pending deep link once app is initialized
+  useEffect(() => {
+    if (isAppInitialized && pendingDeepLink) {
+      console.log('Processing pending deep link:', pendingDeepLink);
+
+      // Add a small delay to ensure all React components are fully rendered
+      const processPendingLink = async () => {
+        try {
+          // Focus window when processing pending deep link
+          await focusWindow();
+          await new Promise(resolve => setTimeout(resolve, 100));
+          await handleDeepLinkInternal(pendingDeepLink);
+        } catch (error) {
+          console.error('Failed to process pending deep link:', error);
+          setError(`Failed to process protocol link: ${error instanceof Error ? error.message : error}`);
+        } finally {
+          setPendingDeepLink(null);
+        }
+      };
+
+      processPendingLink();
+    }
+  }, [isAppInitialized, pendingDeepLink]);
 
   // Initialize animation scope
   useEffect(() => {
@@ -238,17 +297,40 @@ function App() {
     }
   }, [toast]);
 
-  // Wrap all Tauri-dependent useEffects with isTauri check
+  // Enhanced deep link listener with proper error handling
   useEffect(() => {
     if (!isTauri) return;
-    const unlisten = listen<string>("deep-link-received", (event) => {
-      handleDeepLink(event.payload);
-    });
+
+    const setupDeepLinkListener = async () => {
+      try {
+        const unlisten = await listen<string>("deep-link-received", (event) => {
+          console.log('Deep link event received:', event.payload);
+          handleDeepLink(event.payload).catch(error => {
+            console.error('Failed to handle deep link:', error);
+            setError(`Deep link processing failed: ${error.message || error}`);
+          });
+        });
+
+        return unlisten;
+      } catch (error) {
+        console.error('Failed to setup deep link listener:', error);
+        setError('Failed to setup protocol handler');
+        return () => { }; // Return empty cleanup function
+      }
+    };
+
+    let cleanup: (() => void) | null = null;
+
+    setupDeepLinkListener().then(unlistenFn => {
+      cleanup = unlistenFn;
+    }).catch(console.error);
 
     return () => {
-      void unlisten.then(unlistenFn => unlistenFn()).catch(console.error);
+      if (cleanup) {
+        cleanup();
+      }
     };
-  }, []);
+  }, [isAppInitialized]); // Re-setup listener when app initialization state changes
 
   useEffect(() => {
     if (!isTauri) return;
@@ -276,28 +358,145 @@ function App() {
 
   // (save-file-dialog listener removed – save dialog now handled natively in Rust)
 
-  // Handle deep link
-  const handleDeepLink = async (url: string) => {
+  // Internal deep link handler with full error handling
+  const handleDeepLinkInternal = async (url: string) => {
     if (!isTauri) {
       setError('Tauri not available in web mode');
       return;
     }
+
+    // Prevent concurrent deep link processing
+    if (isProcessingDeepLink) {
+      console.log('Already processing a deep link, ignoring new request');
+      return;
+    }
+
     try {
+      setIsProcessingDeepLink(true);
       setLoading(true);
       setError(null);
       setProgress(0);
 
+      console.log('Processing deep link:', url);
+
+      // Validate URL format
+      if (!url || typeof url !== 'string') {
+        throw new Error('Invalid deep link URL format');
+      }
+
       const actualUrl = url.replace(/^wab2b-helper:\/*/i, '');
 
-      // Download the file
-      const fileInfo = await invoke<FileInfo>("download_file", { url: actualUrl });
+      if (!actualUrl) {
+        throw new Error('Empty URL after protocol removal');
+      }
+
+      // Validate that the URL looks like a valid web URL
+      try {
+        new URL(actualUrl);
+      } catch {
+        throw new Error('Invalid URL format');
+      }
+
+      console.log('Downloading file from:', actualUrl);
+
+      // Download the file with timeout
+      const downloadPromise = invoke<FileInfo>("download_file", { url: actualUrl });
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Download timeout after 30 seconds')), 30000);
+      });
+
+      const fileInfo = await Promise.race([downloadPromise, timeoutPromise]);
+
+      if (!fileInfo) {
+        throw new Error('No file information received');
+      }
+
       setFile(fileInfo);
+      console.log('File downloaded successfully:', fileInfo.file_name);
+
     } catch (err) {
       console.error("Error handling deep link:", err);
-      setError(`Failed to download file: ${err}`);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(`Failed to download file: ${errorMessage}`);
+
+      // Show toast notification for better user feedback
+      setToast({
+        message: `Download failed: ${errorMessage}`,
+        type: 'error'
+      });
     } finally {
       setLoading(false);
+      setIsProcessingDeepLink(false);
     }
+  };
+
+  // Function to focus and show the window
+  const focusWindow = async () => {
+    if (!isTauri) return;
+
+    try {
+      const window = getCurrentWindow();
+
+      // Check if window is minimized and unminimize it
+      const isMinimized = await window.isMinimized();
+      if (isMinimized) {
+        await window.unminimize();
+      }
+
+      // Check if window is visible and show it if not
+      const isVisible = await window.isVisible();
+      if (!isVisible) {
+        await window.show();
+      }
+
+      // Bring to front and focus
+      await window.setFocus();
+
+      // Additional focus attempt for better reliability
+      await window.setAlwaysOnTop(true);
+      await window.setAlwaysOnTop(false);
+
+      console.log('Window focused successfully');
+    } catch (error) {
+      console.error('Failed to focus window:', error);
+      // Fallback: try basic show and focus
+      try {
+        const window = getCurrentWindow();
+        await window.show();
+        await window.setFocus();
+      } catch (fallbackError) {
+        console.error('Fallback window focus also failed:', fallbackError);
+      }
+    }
+  };
+
+  // Public deep link handler with initialization checks
+  const handleDeepLink = async (url: string) => {
+    console.log('Deep link received:', url, 'App initialized:', isAppInitialized, 'Processing:', isProcessingDeepLink);
+
+    // Focus the window immediately when deep link is received
+    // Add a small delay to ensure the system has processed the protocol launch
+    setTimeout(() => {
+      focusWindow().catch(error => {
+        console.error('Failed to focus window on deep link:', error);
+      });
+    }, 100);
+
+    // If already processing a deep link, ignore new ones to prevent conflicts
+    if (isProcessingDeepLink) {
+      console.log('Already processing a deep link, ignoring new request');
+      return;
+    }
+
+    // If app is not yet initialized, queue the deep link for later processing
+    if (!isAppInitialized) {
+      console.log('App not initialized, queuing deep link for later processing');
+      setPendingDeepLink(url);
+      return;
+    }
+
+    // If app is initialized, process immediately
+    await handleDeepLinkInternal(url);
   };
 
   // Toggle theme
@@ -359,7 +558,7 @@ function App() {
     ) {
       return;
     }
-    
+
     try {
       // For PDF files, use the Rust backend to open them
       if (file.mime_type === 'application/pdf') {
@@ -371,7 +570,7 @@ function App() {
     } catch (err) {
       console.error('Error previewing file:', err);
       setError(`Failed to preview file: ${err}`);
-      
+
       // If opening fails, try to save the file and then open it
       try {
         const savedPath = await invoke<string>("save_file", { id: file.id });
@@ -423,7 +622,7 @@ function App() {
 
   // State to control the visibility of the update modal
   const [showUpdateModal, setShowUpdateModal] = useState(false);
-  
+
   // State to control the visibility of the settings modal
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
@@ -457,93 +656,92 @@ function App() {
         )}
 
         <main ref={mainRef} className="flex-1 flex flex-col p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-        <div className="absolute top-10 right-4 flex items-center space-x-2">
+          <div className="absolute top-10 right-4 flex items-center space-x-2">
             <SettingsIcon onClick={() => setShowSettingsModal(true)} isDarkMode={theme === 'dark'} />
             <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
-        </div>
-        
-        {/* Settings Modal */}
+          </div>
+
+          {/* Settings Modal */}
           {showSettingsModal && (
-            <SettingsModal 
-              isOpen={showSettingsModal} 
-              onClose={() => setShowSettingsModal(false)} 
-              isDarkMode={theme === 'dark'} 
+            <SettingsModal
+              isOpen={showSettingsModal}
+              onClose={() => setShowSettingsModal(false)}
+              isDarkMode={theme === 'dark'}
               updateManager={updateManager}
             />
           )}
 
-        <div className="flex-1 flex flex-col items-center justify-center">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center space-y-4">
-              <div className="text-[var(--app-text-light)] dark:text-gray-200 font-medium">Loading...</div>
-              <p className="text-[var(--app-text-light)] dark:text-gray-300 font-medium">Downloading file...</p>
-              <div ref={progressBarRef} className="w-64">
+          <div className="flex-1 flex flex-col items-center justify-center">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center space-y-4">
+                <div className="text-[var(--app-text-light)] dark:text-gray-200 font-medium">Loading...</div>
+                <p className="text-[var(--app-text-light)] dark:text-gray-300 font-medium">Downloading file...</p>
+                <div ref={progressBarRef} className="w-64">
+                  <Suspense fallback={<LoadingFallback />}>
+                    <ProgressBar progress={progress} />
+                  </Suspense>
+                </div>
+              </div>
+            ) : file ? (
+              <div className="w-full max-w-2xl flex flex-col items-center space-y-6" ref={fileContentRef}>
+                <div className="relative w-full">
+                  <button
+                    onClick={() => setFile(null)}
+                    className="absolute top-0 right-0 p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 z-10"
+                    aria-label="Close preview"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <FilePreview file={file} onPreview={handlePreview} />
+                  </Suspense>
+                </div>
                 <Suspense fallback={<LoadingFallback />}>
-                  <ProgressBar progress={progress} />
+                  <div className="w-full" style={{
+                    "--action-button-bg": theme === "dark" ? "rgb(31, 41, 55)" : "var(--button-bg-light)",
+                    "--action-button-text": theme === "dark" ? "rgb(243, 244, 246)" : "var(--button-text-light)"
+                  } as React.CSSProperties}>
+                    <ActionButtons onCopy={handleCopy} onSaveDownload={handleSaveDownload} />
+                  </div>
                 </Suspense>
               </div>
-            </div>
-          ) : file ? (
-            <div className="w-full max-w-2xl flex flex-col items-center space-y-6" ref={fileContentRef}>
-              <div className="relative w-full">
-                <button
-                  onClick={() => setFile(null)}
-                  className="absolute top-0 right-0 p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 z-10"
-                  aria-label="Close preview"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
+            ) : (
+              <div className="text-center">
+                <div className="waiting-container p-8 rounded-lg transition-colors duration-200 file-preview-bg shadow-md border border-[var(--border-light)] dark:border-gray-700">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-4 text-blue-700 dark:text-blue-400">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="16"></line>
+                    <line x1="8" y1="12" x2="16" y2="12"></line>
                   </svg>
-                </button>
-                <Suspense fallback={<LoadingFallback />}>
-                  <FilePreview file={file} onPreview={handlePreview} />
-                </Suspense>
-              </div>
-              <Suspense fallback={<LoadingFallback />}>
-                <div className="w-full" style={{ 
-                  "--action-button-bg": theme === "dark" ? "rgb(31, 41, 55)" : "var(--button-bg-light)",
-                  "--action-button-text": theme === "dark" ? "rgb(243, 244, 246)" : "var(--button-text-light)"
-                } as React.CSSProperties}>
-                  <ActionButtons onCopy={handleCopy} onSaveDownload={handleSaveDownload} />
-                </div>
-              </Suspense>
-            </div>
-          ) : (
-            <div className="text-center">
-              <div className="waiting-container p-8 rounded-lg transition-colors duration-200 file-preview-bg shadow-md border border-[var(--border-light)] dark:border-gray-700">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-4 text-blue-700 dark:text-blue-400">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="8" x2="12" y2="16"></line>
-                  <line x1="8" y1="12" x2="16" y2="12"></line>
-                </svg>
-                <h3 className="text-lg font-semibold mb-2 text-[var(--file-header-text-light)] dark:text-white transition-colors duration-200">Waiting for content...</h3>
-                <p className="font-sans font-medium text-[var(--app-text-light)] dark:text-gray-400 mb-4 transition-colors duration-200">
-                  This app handles <code className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 px-2 py-1 rounded font-mono text-sm transition-colors duration-200 border border-blue-200 dark:border-transparent">wab2b-helper:</code> protocol links, from dashboard.wab2b.com.
-                </p>
-                <div className="font-mono text-sm text-[var(--app-text-light)] dark:text-gray-400 mt-3 transition-colors duration-200">
-                  No user input needed - just wait for browser protocol events
+                  <h3 className="text-lg font-semibold mb-2 text-[var(--file-header-text-light)] dark:text-white transition-colors duration-200">Waiting for content...</h3>
+                  <p className="font-sans font-medium text-[var(--app-text-light)] dark:text-gray-400 mb-4 transition-colors duration-200">
+                    This app handles <code className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 px-2 py-1 rounded font-mono text-sm transition-colors duration-200 border border-blue-200 dark:border-transparent">wab2b-helper:</code> protocol links, from dashboard.wab2b.com.
+                  </p>
+                  <div className="font-mono text-sm text-[var(--app-text-light)] dark:text-gray-400 mt-3 transition-colors duration-200">
+                    No user input needed - just wait for browser protocol events
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {error && (
-            <div className="error-message mt-4 p-4 bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300 rounded-lg border border-red-300 dark:border-red-800 shadow-sm font-medium">
-              {error}
-            </div>
-          )}
-          {toast && (
-            <div className={`fixed bottom-4 right-4 px-4 py-2 rounded-lg shadow-lg border ${
-              toast.type === 'success' 
-                ? 'bg-green-600 border-green-700 dark:bg-green-500 dark:border-green-600' 
+            {error && (
+              <div className="error-message mt-4 p-4 bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300 rounded-lg border border-red-300 dark:border-red-800 shadow-sm font-medium">
+                {error}
+              </div>
+            )}
+            {toast && (
+              <div className={`fixed bottom-4 right-4 px-4 py-2 rounded-lg shadow-lg border ${toast.type === 'success'
+                ? 'bg-green-600 border-green-700 dark:bg-green-500 dark:border-green-600'
                 : 'bg-red-600 border-red-700 dark:bg-red-500 dark:border-red-600'
-            } text-white font-medium`}>
-              {toast.message}
-            </div>
-          )}
-        </div>
-      </main>
+                } text-white font-medium`}>
+                {toast.message}
+              </div>
+            )}
+          </div>
+        </main>
       </Suspense>
     </div>
   );

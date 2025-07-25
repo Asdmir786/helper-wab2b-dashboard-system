@@ -25,12 +25,16 @@
     "security": {
       "csp": {
         "default-src": ["'self'"],
-        "img-src": ["'self'", "data:", "asset:", "https://*", "blob:"],
-        "media-src": ["'self'", "data:", "asset:", "https://*", "blob:"],
+        "img-src": ["'self'", "data:", "asset:", "https://*", "blob:", "tauri:"],
+        "media-src": ["'self'", "data:", "asset:", "https://*", "blob:", "tauri:"],
         "style-src": ["'self'", "'unsafe-inline'"],
         "connect-src": ["'self'", "https://*"]
       },
-      "capabilities": ["default", "main-capability"]
+      "capabilities": ["default", "main-capability"],
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
     },
     "withGlobalTauri": true
   },

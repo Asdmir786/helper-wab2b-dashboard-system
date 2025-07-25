@@ -8,6 +8,13 @@
     "core:window:allow-close",
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "core:window:allow-is-minimized",
+    "core:window:allow-is-visible",
+    "core:window:allow-set-always-on-top",
     "deep-link:default",
     "opener:default",
     {
@@ -27,6 +34,15 @@
     "fs:allow-temp-read-recursive",
     "fs:read-all",
     {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "${tempDir}/**" },
+        { "path": "${localDataDir}/**" },
+        { "path": "${appLocalDataDir}/**" },
+        { "path": "${appDataDir}/**" }
+      ]
+    },
+    {
       "identifier": "shell:allow-execute",
       "allow": [
         {
@@ -38,4 +54,4 @@
       ]
     }
   ]
-} 
+}
